@@ -1,0 +1,6 @@
+v0.0.2, 2021-08-24 -- New iteration:
+        - New venv in Makefile, requirements file
+        - New setup.py using setuptools
+        - Include doctests in Makefile
+        - Removed .txt README
+v0.0.1, 2020-07-28 -- First template version.
