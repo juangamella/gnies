@@ -1,4 +1,4 @@
-# Copyright 2020 Juan Luis Gamella Martin
+# Copyright 2021 Juan L Gamella
 
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -31,7 +31,37 @@
 """
 """
 
-import numpy as np
+from .decomposable_score import DecomposableScore
 
-#---------------------------------------------------------------------
-# 
+# --------------------------------------------------------------------
+# Null score
+
+
+class NullObsScore(DecomposableScore):
+    """
+    Implements a null score (always returns 0)
+
+    """
+    def __init__(self):
+        return None
+
+    def full_score(self, A):
+        return 0
+
+    def local_score(self, x, pa):
+        return 0
+
+
+class NullIntScore(DecomposableScore):
+    """
+    Implements a null score (always returns 0)
+
+    """
+    def __init__(self):
+        return None
+
+    def full_score(self, A, I):
+        return 0
+
+    def local_score(self, x, pa, I):
+        return 0

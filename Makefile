@@ -29,7 +29,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 SUITE = all
-PROJECT = template
+PROJECT = gnies
 
 # Run tests
 tests: test examples doctests
@@ -43,7 +43,7 @@ endif
 
 # Run the example scripts in the README
 examples:
-	PYTHONPATH=./ python3 docs/template_example.py
+	PYTHONPATH=./ python3 docs/gnies_example.py
 
 # Run the doctests
 doctests:
