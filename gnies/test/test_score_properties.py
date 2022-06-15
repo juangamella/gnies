@@ -115,7 +115,7 @@ class Assumption1Tests(unittest.TestCase):
         for i, A in enumerate(graphs):
             I = set(sempler.generators.intervention_targets(
                 self.p, 1, (0, self.p))[0])
-            i_cpdag = utils.dag_to_imec(A, I)
+            i_cpdag = utils.dag_to_icpdag(A, I)
             equivalent_dags = utils.all_dags(i_cpdag)
             # Iterate over all equivalent DAGs, and check they have the same score
             first_score = self.coarse_score.full_score(A, I)

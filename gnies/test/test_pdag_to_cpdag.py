@@ -749,7 +749,7 @@ class IMEC_Tests(unittest.TestCase):
                          [1, 1, 0, 0]])
         self.assertFalse(utils.rule_4(0, 1, pdag))
 
-    def test_dag_to_imec(self):
+    def test_dag_to_icpdag(self):
         # Test that the DAG is a consistent extension of the resulting
         # icpdag, and that all variables in I have no incident
         # unoriented edges
@@ -758,13 +758,13 @@ class IMEC_Tests(unittest.TestCase):
         for k in range(G):
             dag = sempler.generators.dag_avg_deg(p, 3, 1, 1)
             I = set(sempler.generators.intervention_targets(p, 1, (0, p))[0])
-            icpdag = utils.dag_to_imec(dag, I)
+            icpdag = utils.dag_to_icpdag(dag, I)
             self.assertTrue(utils.is_consistent_extension(dag, icpdag))
             for i in I:
                 self.assertEqual(len(utils.neighbors(i, icpdag)), 0)
         print("\nChecked DAG -> ICPDAG for %d DAGs" % (k + 1))
 
-    def test_dag_to_imec_full(self):
+    def test_dag_to_icpdag_full(self):
         # For full dags
         # Test that the DAG is a consistent extension of the resulting
         # icpdag, and that all variables in I have no incident
@@ -774,7 +774,7 @@ class IMEC_Tests(unittest.TestCase):
         for k in range(G):
             dag = sempler.generators.dag_full(p)
             I = set(sempler.generators.intervention_targets(p, 1, (0, p))[0])
-            icpdag = utils.dag_to_imec(dag, I)
+            icpdag = utils.dag_to_icpdag(dag, I)
             self.assertTrue(utils.is_consistent_extension(dag, icpdag))
             for i in I:
                 self.assertEqual(len(utils.neighbors(i, icpdag)), 0)

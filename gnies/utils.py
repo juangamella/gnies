@@ -1036,7 +1036,6 @@ def delete(array, mask, axis=None):
 # --------------------------------------------------------------------
 # New functions (not in GES repo), e.g. functions DAG to I-CPDAG conversion
 # TODO: documentation
-# TODO: Test dag_to_imec
 
 # Meek rules
 
@@ -1129,17 +1128,17 @@ def maximally_orient(P, debug=False):
     return P
 
 
-def pdag_to_imec(P, I):
+def pdag_to_icpdag(P, I):
     # Check that all edges around variables in I are oriented
     for i in I:
         if len(neighbors(i, P)) > 0:
             msg = "Invalid PDAG: has undirected edges around %d for I=%s"
             raise ValueError(msg % (i, I))
     G = pdag_to_dag(P)
-    return dag_to_imec(G, I)
+    return dag_to_icpdag(G, I)
 
 
-def dag_to_imec(G, I, debug=False):
+def dag_to_icpdag(G, I, debug=False):
     P = dag_to_cpdag(G)
     # Construct edges that must be oriented
     directed_edges = []
