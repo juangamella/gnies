@@ -919,3 +919,289 @@ class UtilsTests(unittest.TestCase):
         for i in range(10):
             G = sempler.generators.dag_full(p)
             self.assertTrue(utils.is_complete(G))
+
+    def test_degrees_1(self):
+        """Test that for random generated DAGs, the returned degrees satisty
+        the degree formula, i.e. sum-of-degrees = 2 * #edges"""
+        G = 50
+        p = 10
+        for i in range(G):
+            A = sempler.generators.dag_avg_deg(p, 2.5, random_state=i)
+            no_edges = A.sum()
+            degrees = utils.degrees(A)
+            self.assertEqual(degrees.sum(), 2 * no_edges)
+            # Check that the degrees are the same for the CPDAG and skeleton of A
+            cpdag = utils.dag_to_cpdag(A)
+            skeleton = utils.dag_to_cpdag(A)
+            self.assertTrue((degrees == utils.degrees(cpdag)).all())
+            self.assertTrue((degrees == utils.degrees(skeleton)).all())
+            # Check that result matches when we construct the degree
+            # through other functions
+            alt_degrees = []
+            for j in range(p):
+                alt_degrees.append(len(utils.pa(j, A)) + len(utils.ch(j, A)))
+            self.assertTrue((alt_degrees == degrees).all())
+
+    def test_degrees_2(self):
+        A = np.array([[0, 1, 0, 0],
+                      [0, 0, 1, 1],
+                      [0, 0, 0, 1],
+                      [0, 0, 0, 0]])
+        degrees = utils.degrees(A)
+        true_degrees = np.array([1, 3, 2, 2])
+        self.assertTrue((true_degrees == degrees).all())
+        # Check that same holds for skeleton and cpdag of the graph
+        cpdag = utils.dag_to_cpdag(A)
+        skeleton = utils.dag_to_cpdag(A)
+        self.assertTrue((degrees == utils.degrees(cpdag)).all())
+        self.assertTrue((degrees == utils.degrees(skeleton)).all())
+
+    def test_moral_graph_1(self):
+        """Test that for random generated DAGs, the moral graph of the DAG and
+        the CPDAG are the same."""
+        G = 50
+        p = 10
+        for i in range(G):
+            A = sempler.generators.dag_avg_deg(p, 2.5, random_state=i)
+            cpdag = utils.dag_to_cpdag(A)
+            self.assertTrue(
+                (utils.moral_graph(A) == utils.moral_graph(cpdag)).all())
+
+    def test_moral_graph_2(self):
+        """Test moralization of basic X -> Y <- Z"""
+        A = np.array([[0, 1, 0],
+                      [0, 0, 0],
+                      [0, 1, 0]])
+        true_moral = np.array([[0, 1, 1],
+                               [1, 0, 1],
+                               [1, 1, 0]])
+        self.assertTrue((utils.moral_graph(A) == true_moral).all())
+
+    def test_moral_graph_3(self):
+        """Test moralization of basic X -> Y <- Z"""
+        A = np.array([[0, 0, 1, 0, 0],
+                      [0, 0, 1, 0, 0],
+                      [0, 0, 0, 1, 1],
+                      [0, 0, 0, 0, 1],
+                      [0, 0, 0, 0, 0]])
+        true_moral = np.array([[0, 1, 1, 0, 0],
+                               [1, 0, 1, 0, 0],
+                               [1, 1, 0, 1, 1],
+                               [0, 0, 1, 0, 1],
+                               [0, 0, 1, 1, 0]])
+        self.assertTrue((utils.moral_graph(A) == true_moral).all())
+
+    def test_split_data_1(self):
+        p = 10
+        n_obs = [10, 20, 30, 40, 50]
+        X = [np.ones((n_obs[i], p)) * i for i in range(len(n_obs))]
+        # Check that for n_folds everything remains the same
+        for i, env in enumerate(utils.split_data(X, ratios=[1])[0]):
+            self.assertTrue((env == X[i]).all())
+            # Check for other fold sizes
+        for n_folds in [2, 5, 10]:
+            ratios = [1 / n_folds] * n_folds
+            folds = utils.split_data(X, ratios)
+            # print("\n----------------------")
+            # print("n_folds =", n_folds)
+            # print(folds)
+            for fold in folds:
+                # Check dimensions
+                self.assertEqual(len(fold), len(n_obs))
+                for i, env_sample in enumerate(fold):
+                    # Check dimensions
+                    self.assertEqual(len(env_sample), n_obs[i] / n_folds)
+                    # Check that only data from the correct environment ended here
+                    self.assertTrue((env_sample == i).all())
+
+    def test_split_data_2(self):
+        """Check that when splitting the data, each fold actually ends up with
+        different observations"""
+        W = sempler.generators.dag_avg_deg(4, 2.5, 0.5, 1)
+        scm = sempler.LGANM(W, (0, 0), (3, 4))
+        data = [scm.sample(20), scm.sample(20, noise_interventions={0: (1, 1)})]
+        [fold_1, fold_2] = utils.split_data(data, ratios=[0.5, 0.5])
+        flattened_1 = np.array(fold_1).flatten()
+        flattened_2 = np.array(fold_2).flatten()
+        self.assertFalse((flattened_1 == flattened_2).any())
+
+    def test_split_data_3(self):
+        """Check that when splitting the data, each fold actually ends up with
+        different observations"""
+        W = sempler.generators.dag_avg_deg(4, 2.5, 0.5, 1)
+        scm = sempler.LGANM(W, (0, 0), (3, 4))
+        n = 99
+        data = [scm.sample(99), scm.sample(99, noise_interventions={0: (1, 1)})]
+        # Check that all datapoints are contained in one of the folds
+        [fold_1, fold_2] = utils.split_data(data, ratios=[0.5, 0.5])
+        for (s1, s2) in zip(fold_1, fold_2):
+            self.assertEqual(len(s1) + len(s2), n)
+            # Check that the observations in each fold are disjoint
+        flattened_1 = set(np.array(fold_1).flatten())
+        flattened_2 = set(np.array(fold_2).flatten())
+        self.assertEqual(set(), flattened_1 & flattened_2)
+        # Check that the correct number of observations are assigned
+        # to each fold
+        n_obs = [100, 200]
+        data = [scm.sample(n_obs[0]), scm.sample(n_obs[1], noise_interventions={0: (1, 1)})]
+        ratios = [.1, .2, .3, .4]
+        folds = utils.split_data(data, ratios=ratios)
+        for i, fold in enumerate(folds):
+            for j, sample in enumerate(fold):
+                self.assertEqual(len(sample), ratios[i] * n_obs[j])
+
+        def test_directed_edges(self):
+            p = 15
+            k = 2.7
+            for i in range(100):
+                A = sempler.generators.dag_avg_deg(p, k)
+                edges = utils.directed_edges(A)
+                # Check number is correct
+                self.assertEqual(len(edges), np.sum(A))
+                # Check that original graph can be reconstructed
+                new_A = np.zeros_like(A)
+                for (i, j) in edges:
+                    new_A[i, j] = 1
+                    self.assertTrue((new_A == A).all())
+
+        def test_supergraph_1(self):
+            A = np.array([[0, 1, 0],
+                          [0, 0, 0],
+                          [0, 0, 0]])
+            B1, B2, B3 = A.copy(), A.copy(), A.copy()
+            # Same graph should return true
+            # Add edge
+            B1[0, 2] = 1
+            self.assertTrue(utils.is_supergraph(B1, A))
+            self.assertFalse(utils.is_supergraph(A, B1))
+            # Add edge
+            B2[1, 2] = 1
+            self.assertTrue(utils.is_supergraph(B2, A))
+            self.assertFalse(utils.is_supergraph(A, B2))
+            # Flip
+            self.assertFalse(utils.is_supergraph(A, A.T))
+            B3[0, 2] = 1
+            B3[1, 2] = 1
+            self.assertTrue(utils.is_supergraph(B3, A))
+            self.assertTrue(utils.is_supergraph(B3, B1))
+            self.assertTrue(utils.is_supergraph(B3, B2))
+            self.assertFalse(utils.is_supergraph(A, B3))
+            self.assertFalse(utils.is_supergraph(B1, B3))
+            self.assertFalse(utils.is_supergraph(B2, B3))
+
+        def test_supergraph_2(self):
+            p = 15
+            k = 2.7
+            for i in range(10):
+                A = sempler.generators.dag_avg_deg(p, k)
+                self.assertTrue(utils.is_supergraph(A, A))
+
+        def test_remove_edges(self):
+            p = 15
+            k = 2.7
+            rem = 10
+            for i in range(50):
+                A = sempler.generators.dag_avg_deg(p, k)
+                subgraph = utils.remove_edges(A, rem, random_state=i)
+                self.assertEqual(A.sum() - rem, subgraph.sum())
+                self.assertTrue(utils.is_supergraph(A, subgraph))
+                # Check that removing as many edges as there are returns
+                # the empty graph
+                subgraph = utils.remove_edges(A, int(A.sum()))
+                self.assertTrue((np.zeros_like(A) == subgraph).all())
+                # Check that error is returned when attempting to remove
+                # more edges than possible
+                try:
+                    utils.remove_edges(A, A.sum() + 1)
+                    self.fail()
+                except ValueError:
+                    pass
+
+        def test_add_edges(self):
+            p = 15
+            k = 2.7
+            add = 10
+            for i in range(50):
+                A = sempler.generators.dag_avg_deg(p, k)
+                supergraph = utils.add_edges(A, add, random_state=i)
+                self.assertEqual(A.sum() + add, supergraph.sum())
+                self.assertTrue(utils.is_supergraph(supergraph, A))
+                # Check that adding all possible edges leads to the fully
+                # connected graph
+                can_add = int(p * (p - 1) / 2 - A.sum())
+                supergraph = utils.add_edges(A, can_add)
+                self.assertTrue((np.ones_like(A) - np.eye(p) ==
+                                 utils.skeleton(supergraph)).all())
+                # Check that error is returned when attempting to add more
+                # edges than is possible
+                try:
+                    utils.add_edges(A, can_add + 1)
+                    self.fail()
+                except ValueError:
+                    pass
+
+    def test_chain_graph(self):
+        for p in range(1, 20):
+            A = utils.chain_graph(p)
+            self.assertTrue(utils.is_chain_graph(A))
+            self.assertEqual(p - 1, np.sum(A))
+
+    def test_chain_graph_MEC(self):
+        # For smaller chain graphs computing the MEC from the
+        # CPDAG is still fast; check the outputs match
+        for p in range(1, 12):
+            # start = time.time()
+            MEC_a = utils.chain_graph_MEC(p)
+            A = utils.chain_graph(p)
+            cpdag = utils.dag_to_cpdag(A)
+            MEC_b = utils.all_dags(cpdag)
+            MEC_c = utils.mec(A)
+            # print("p=%d - %0.2f seconds" % (p, time.time() - start))
+            # Check both sets are the same
+            self.assertTrue(same_elements(MEC_a, MEC_b))
+            self.assertTrue(same_elements(MEC_a, MEC_c))
+
+    def test_chain_graph_IMEC(self):
+        # For smaller chain graphs computing the MEC from the
+        # CPDAG is still fast; check the outputs match
+        rng = np.random.default_rng(42)
+        for p in range(1, 12):
+            for k in range(p + 1):
+                A = utils.chain_graph(p)
+                I = set(rng.choice(range(p), size=k, replace=False))
+                # start = time.time()
+                IMEC_a = utils.chain_graph_IMEC(A, I)
+                icpdag = utils.dag_to_icpdag(A, I)
+                IMEC_b = utils.all_dags(icpdag)
+                IMEC_c = utils.imec(A, I)
+                # print("p=%d |I|=%d - %0.2f seconds" % (p, len(I), time.time() - start))
+                # Check both sets are the same
+                self.assertTrue(same_elements(IMEC_a, IMEC_b))
+                self.assertTrue(same_elements(IMEC_a, IMEC_c))
+
+    def test_imec(self):
+        G = 50
+        p = 12
+        for i in range(G):
+            A = sempler.generators.dag_avg_deg(p, 3, 1, 1)
+            # Check that MEC and I-MEC are the same for I = set()
+            mec = utils.mec(A)
+            imec = utils.imec(A, set())
+            self.assertTrue(same_elements(mec, imec))
+            # Check that I-MEC is a singleton when I = [p]
+            I = set(range(p))
+            imec = utils.imec(A, I)
+            self.assertEqual(1, len(imec))
+            self.assertTrue((A == imec[0]).all())
+
+
+def same_elements(A, B):
+    """Check that two arrays have the same elements (in same or different
+    order) along the zero axis."""
+    if len(np.unique(A, axis=0)) != len(np.unique(B, axis=0)):
+        return False
+    else:
+        for a in A:
+            if utils.member(B, a) is None:
+                return False
+        return True
