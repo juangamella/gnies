@@ -2,10 +2,10 @@ import setuptools
 
 setuptools.setup(
     name='gnies',
-    version='0.0.2',
+    version='0.0.3',
     author='Juan L. Gamella',
     author_email='juangamella@gmail.com',
-    packages=['gnies'],
+    packages=['gnies', 'gnies.scores'],
     scripts=[],
     url='https://github.com/juangamella/gnies',
     license='BSD 3-Clause License',

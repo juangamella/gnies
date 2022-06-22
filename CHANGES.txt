@@ -1,2 +1,3 @@
+v0.0.3, 2022-06-21 -- Set gnies.scores as package in setup.py
 v0.0.2, 2022-06-15 -- Minor fixes to setup.py file and README.
 v0.0.1, 2022-06-15 -- First version with a functioning implementation of GnIES + tests.
