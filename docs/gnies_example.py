@@ -6,8 +6,6 @@ import gnies
 W = sempler.generators.dag_avg_deg(10, 2.1, 0.5, 1)
 scm = sempler.LGANM(W, (0, 0), (1, 2))
 
-true_icpdag = gnies.utils.
-
 # Generate interventional data
 data = [
     scm.sample(n=1000),

@@ -35,11 +35,11 @@ import ges
 # --------------------------------------------------------------------
 
 
-def fit(data, covariances=None, I0=set(), I_candidates=None, backward_phase=False, centered=True, ges_iterate=True, ges_phases=['forward', 'backward', 'turning'], debug=0):
+def fit(data, covariances=None, I0=set(), I_candidates=None, backward_phase=False, centered=True, ges_iterate=True, ges_phases=['forward', 'backward', 'turning'], ges_lambda=None, debug=0):
 
     print("Running alternating UT-GES") if debug else None
     # Iteration 0: no interventions
-    score_class = FixedInterventionalScore(data, I0, centered=centered)
+    score_class = FixedInterventionalScore(data, I0, centered=centered, lmbda=ges_lambda)
     if covariances is not None:
         score_class._sample_covariances = covariances
 
@@ -66,7 +66,7 @@ def fit(data, covariances=None, I0=set(), I_candidates=None, backward_phase=Fals
             next_Is = current_I
         for i in next_Is:
             new_I = current_I | {i} if phase == 'forward' else current_I - {i}
-            score_class = FixedInterventionalScore(data, new_I, centered=centered)
+            score_class = FixedInterventionalScore(data, new_I, centered=centered, lmbda=ges_lambda)
             if covariances is not None:
                 score_class._sample_covariances = covariances
 
