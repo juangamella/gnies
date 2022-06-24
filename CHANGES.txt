@@ -1,3 +1,6 @@
+v0.0.4, 2022-06-24
+-- New parameter in gnies.fit to set lambda used by GES
+-- Fixed bug in example
 v0.0.3, 2022-06-21
 -- Set gnies.scores as package in setup.py
 -- Removed requirements.txt file
