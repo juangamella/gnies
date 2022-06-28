@@ -166,7 +166,7 @@ def is_clique(S, A):
     subgraph = skeleton(subgraph)  # drop edge orientations
     no_edges = np.sum(subgraph != 0)
     n = len(S)
-    return no_edges == n * (n-1)
+    return no_edges == n * (n - 1)
 
 
 def is_dag(A):
@@ -195,6 +195,140 @@ def is_complete(P):
     no_edges = ((P + P.T) != 0).sum() / 2
     p = len(P)
     return no_edges == (p * (p - 1) / 2)
+
+
+def chain_graph(p):
+    """Generate the adjacency of a chain DAG with p variables."""
+    A = np.zeros((p, p))
+    ix = np.arange(p - 1)
+    A[ix, ix + 1] = 1
+    return A
+
+
+def is_chain_graph(A):
+    """Check whether the given DAG adjacency corresponds to a chain
+graph.
+    """
+    p = len(A)
+    return (A == chain_graph(p)).all()
+
+
+def mec(A, check_chain=True):
+    """Given a DAG adjacency A, enumerate all the members in its
+    Markov-equivalence class.
+
+    Parameters
+    ----------
+    A : numpy.ndarray
+        The adjacency matrix of the graph, where A[i,j] != 0 => i -> j
+        and A[i,j] != 0 & A[j,i] != 0 => i - j.
+    check_chain : bool, default=True
+        If True, checks whether the given graph is a chain graph, and
+        if so, uses a more efficient way to enumerate the MEC (see
+        chain_graph_mec).
+
+    Returns
+    -------
+    mec : numpy.ndarray
+        A three dimensional array, with axis=0 corresponding to the
+        graphs in the MEC.
+
+    Raises
+    ------
+    ValueError :
+        If the given adjacency does not correspond to a DAG.
+
+    """
+    # Check input
+    if not is_dag(A):
+        raise ValueError("The given adjacency does not correspond to a DAG.")
+    if check_chain and is_chain_graph(A):
+        return chain_graph_MEC(len(A))
+    else:
+        cpdag = dag_to_cpdag(A)
+        return all_dags(cpdag)
+
+
+def imec(A, I, check_chain=True):
+    """Given a DAG adjacency A and a set of intervention targets I,
+    enumerate all the members in the corresponding I-equivalence
+    class.
+
+    Parameters
+    ----------
+    A : numpy.ndarray
+        The adjacency matrix of the graph, where A[i,j] != 0 => i -> j
+        and A[i,j] != 0 & A[j,i] != 0 => i - j.
+    I : set
+        A set containing the intervention targets.
+    check_chain : bool, default=True
+        If True, checks whether the given graph is a chain graph, and
+        if so, uses a more efficient way to enumerate the MEC (see
+        chain_graph_mec).
+
+    Returns
+    -------
+    mec : numpy.ndarray
+        A three dimensional array, with axis=0 corresponding to the
+        graphs in the MEC.
+
+    Raises
+    ------
+    ValueError :
+        If the given adjacency does not correspond to a DAG.
+
+    """
+    # Check inputs
+    if not is_dag(A):
+        raise ValueError("The given adjacency does not correspond to a DAG.")
+    if not I <= set(range(len(A))):
+        raise ValueError("Targets I must be a subset of [p].")
+
+    if check_chain and is_chain_graph(A):
+        return chain_graph_IMEC(A, I)
+    else:
+        icpdag = dag_to_icpdag(A, I)
+        return all_dags(icpdag)
+
+
+def chain_graph_MEC(p):
+    """Enumerate the MEC of a chain graph of p-variables. Implemented as a
+    separate function because enumerating all graphs from the CPDAG is
+    extremely costly for chain graphs."""
+    MEC = []
+    for i in range(p):
+        A = np.zeros((p, p))
+        # Add "backward pointing" edges
+        for j in range(i, 0, -1):
+            A[j, j - 1] = 1
+        # Add "forward pointing" edges
+        for j in range(i, p - 1):
+            A[j, j + 1] = 1
+        MEC.append(A)
+    return np.array(MEC)
+
+
+def chain_graph_IMEC(A, I):
+    """Given a chain graph and some intervention targets, enumerate all the members of its
+    interventional equivalence class.
+
+    Raises
+    ------
+    ValueError :
+        If the given adjacency does not correspond to a chain graph.
+    """
+    # Check input
+    if not is_chain_graph(A):
+        raise ValueError("The given adjacency is not a chain graph.")
+    p = len(A)
+    MEC = chain_graph_MEC(p)
+    IMEC = []
+    I = list(I)
+    for me in MEC:
+        # If parents of intervened variables match, keep in I-MEC
+        if (me[:, I] == A[:, I]).all():
+            IMEC.append(me)
+    return np.array(IMEC)
 
 
 def topological_ordering(A):
@@ -430,6 +564,44 @@ def vstructures(A):
     return set(vstructs)
 
 
+def moral_graph(A):
+    # TODO: Test
+    """Return the moral graph of DAG A.
+
+    Parameters
+    ----------
+    A: np.array
+        The adjacency of the DAG, where A[i, j] != 0 = > i -> j
+
+    Returns
+    -------
+    moral: np.array
+       The adjacency of the (undirected) moral graph of A.
+    """
+    moral = skeleton(A)
+    for (i, _, j) in vstructures(A):
+        moral[i, j] = 1
+        moral[j, i] = 1
+    return moral
+
+
+def degrees(A):
+    # TODO: Test
+    """Return the degrees of the nodes of a graph.
+
+    Parameters
+    ----------
+    A: np.array
+        The adjacency of the graph, where A[i, j] != 0 = > i -> j
+
+    Returns
+    -------
+    degrees: np.array
+        A vector containing the degree of each vertex in the graph.
+    """
+    return np.sum(skeleton(A), axis=0)
+
+
 def only_directed(P):
     """
     Return the graph with the same nodes as P and only its directed edges.
@@ -499,6 +671,34 @@ def undirected_edges(P):
     return list(undirected_edges)
 
 
+def directed_edges(A):
+    """Return a list with the undirected edges in a graph A.
+
+    Parameters
+    ----------
+    A : np.array
+        Adjacency matrix of a graph.
+
+    Returns
+    -------
+    edges : list of tuples
+        List of tuples, where (i,j) simbolizes an edge i->j in A.
+    """
+    fro, to = np.where(only_directed(A))
+    return list(zip(fro, to))
+
+
+def edge_weights(W):
+    """Return the weights of all the edges of W in a dictionary, i.e. with
+    keys (i,j) for values W[i,j] when W[i,j] != 0."""
+    # TODO: Test
+    fro, to = np.where(W != 0)
+    edges = list(zip(fro, to))
+    weights = [W[i, j] for i, j in edges]
+    edge_weights = dict(zip(edges, weights))
+    return edge_weights
+
+
 def skeleton(A):
     """Return the skeleton of a given graph.
 
@@ -555,7 +755,7 @@ def is_consistent_extension(G, P, debug=False):
     # guaranteed to have
     # no undirected edges
     if debug:
-        print("v-structures (%s) (P,G): " % same_vstructures,  vstructures(P), vstructures(G))
+        print("v-structures (%s) (P,G): " % same_vstructures, vstructures(P), vstructures(G))
         print("skeleton (%s) (P,G): " % same_skeleton, skeleton(P), skeleton(G))
         print("orientation (%s) (P,G): " % same_orientation, P, G)
     return same_vstructures and same_orientation and same_skeleton
@@ -605,6 +805,81 @@ def are_backward_neighbors(P1, P2, x, y):
     any edge between x and y results in a dag consistent with P1.
     """
     return are_forward_neighbors(P2, P1, x, y)
+
+
+def to_factorization(G):
+    """Return the given graph in a factorization representation, i.e. a
+    list of the parents of each node."""
+    # TODO: Test, docstring
+    if not is_dag(G):
+        raise ValueError("G is not a DAG")
+    return tuple(tuple(sorted(pa(j, G))) for j in range(len(G)))
+
+
+def is_supergraph(sup, A):
+    """Return True if sup is a supergraph of A.
+    """
+    return (np.logical_and(sup, A) == A).all()
+
+
+def has_subgraph(L1, L2):
+    # TODO: Test
+    """Test if every graph in L1 has a subgraph in L2"""
+    for A1 in L1:
+        has_subgraph = np.array([is_supergraph(A1, A2) for A2 in L2]).any()
+        if not has_subgraph:
+            return False
+    return True
+
+
+def has_supergraph(L1, L2):
+    # TODO: Test
+    """Test if every graph in L1 has a supergraph in L2"""
+    for A1 in L1:
+        has_supergraph = np.array([is_supergraph(A2, A1) for A2 in L2]).any()
+        if not has_supergraph:
+            return False
+    return True
+
+
+def remove_edges(A, no_edges, random_state=42):
+    """Remove `no_edges` at random from A."""
+    A = A.astype(bool).astype(int)
+    rng = np.random.default_rng(random_state)
+    edges = directed_edges(A)
+    if len(edges) < no_edges:
+        raise ValueError("There are not enough edges to remove.")
+    pruned = A.copy()
+    for (fro, to) in rng.choice(edges, no_edges, replace=False):
+        pruned[fro, to] = 0
+    return pruned
+
+
+def add_edges(A, no_edges, random_state=42):
+    """Add `no_edges` at random to A while preserving a DAG structure."""
+    A = A.astype(bool).astype(int)
+    # Edges between non-adjacent nodes
+    fro, to = np.where((A + A.T + np.eye(len(A))) == 0)
+    rng = np.random.default_rng(random_state)
+    edges = list(zip(fro, to))
+    rng.shuffle(edges)
+    # Check inputs
+    p = len(A)
+    can_add = int(p * (p - 1) / 2 - A.sum())
+    if no_edges > can_add:
+        raise ValueError("It is not possible to add %d edges to the given DAG." % no_edges)
+    # Add edges at random
+    supergraph = A.copy()
+    i = 0
+    while (supergraph.sum() - A.sum()) < no_edges and i < len(edges):
+        next_supergraph = supergraph.copy()
+        next_supergraph[edges[i]] = 1
+        i += 1
+        if is_dag(next_supergraph):
+            supergraph = next_supergraph
+    assert (supergraph.sum() - A.sum() == no_edges)
+    return supergraph
+
 
 # --------------------------------------------------------------------
 # Functions for PDAG to CPDAG conversion
@@ -835,7 +1110,7 @@ def label_edges(ordered):
     if not is_dag(ordered):
         raise ValueError("The given graph is not a DAG")
     no_edges = (ordered != 0).sum()
-    if sorted(ordered[ordered != 0]) != list(range(1, no_edges+1)):
+    if sorted(ordered[ordered != 0]) != list(range(1, no_edges + 1)):
         raise ValueError("The ordering of edges is not valid:", ordered[ordered != 0])
     # define labels: 1: compelled, -1: reversible, -2: unknown
     COM, REV, UNK = 1, -1, -2
@@ -927,7 +1202,7 @@ def cartesian(arrays, out=None, dtype=np.byte):
     if arrays[1:]:
         cartesian(arrays[1:], out=out[0:m, 1:])
         for j in range(1, arrays[0].size):
-            out[j*m:(j+1)*m, 1:] = out[0:m, 1:]
+            out[j * m:(j + 1) * m, 1:] = out[0:m, 1:]
     return out
 
 
@@ -1032,6 +1307,66 @@ def delete(array, mask, axis=None):
         return np.delete(array, idx, axis)
     else:
         return np.delete(array, mask, axis)
+
+
+def split_data(data, ratios, random_state=42):
+    """Split the given data into several folds for training/validation.
+
+    Parameters
+    ----------
+    data : list of numpy.ndarray
+        A list containing the sample from each environment.
+    ratios : list of float
+        A list with as many elements as folds, each indicating the
+        proportion of the data allocated to it. The elements of the
+        list must sum to 1.
+
+    Returns
+    -------
+    splits : list of list of numpy.ndarray
+
+    Raises
+    ------
+    ValueError :
+        If the elements in ratios do not sum up to 1.
+
+    """
+    # Check inputs
+    if np.sum(ratios) != 1:
+        raise ValueError("The elements in ratios must add up to 1.")
+    # Split the data into folds
+    n_folds = len(ratios)
+    folds = dict((i, []) for i in range(n_folds))
+    rng = np.random.default_rng(random_state)
+    for sample in data:
+        n = len(sample)
+        sample = sample.copy()
+        rng.shuffle(sample)
+        start = 0
+        for i, ratio in enumerate(ratios):
+            if i < n_folds:
+                fold_size = round(n * ratio)
+                fold_sample = sample[start:start + fold_size]
+            else:
+                fold_sample = sample[start::]
+            folds[i].append(fold_sample)
+            start += fold_size
+    assert len(folds) == n_folds
+    assert len(folds[0]) == len(data)
+    return list(folds.values())
+
+
+def sorted_tuple(iterable):
+    """Given an iterable which implements tuple and sorted, return the
+    corresponding tuple representation where all elements are sorted.
+    TODO: Write a proper docstring."""
+    return tuple(sorted(tuple(iterable)))
+
+
+def all_but(k, p):
+    """Return [0,...,p-1] without k"""
+    k = np.atleast_1d(k)
+    return [i for i in range(p) if i not in k]
 
 # --------------------------------------------------------------------
 # New functions (not in GES repo), e.g. functions DAG to I-CPDAG conversion
