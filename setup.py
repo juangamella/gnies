@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name='gnies',
-    version='0.0.1',
+    version='0.1.1',
     author='Juan L. Gamella',
     author_email='juangamella@gmail.com',
     packages=['gnies', 'gnies.scores'],
