@@ -31,13 +31,79 @@
 from gnies.scores.experimental import FixedInterventionalScore
 import gnies.utils as utils
 import ges
+import numpy as np
 
 # --------------------------------------------------------------------
 
+def fit(data, covariances=None, centered=True, approach='rank', ges_iterate=True, ges_phases=['forward', 'backward', 'turning'], ges_lambda=None, debug=0):
+    if approach == 'rank':
+        return fit_rank(data, covariances, centered, ges_iterate, ges_phases, ges_lambda, debug)
+    elif approach == 'greedy':
+        return fit_greedy(data, covariances, set(), None, False, centered, ges_iterate, ges_phases, ges_lambda, debug)
+    elif approach == 'greedy_w_backward':
+        return fit_greedy(data, covariances, set(), None, True, centered, ges_iterate, ges_phases, ges_lambda, debug)
+    else:
+        raise ValueError('Invalid value for "approach=%s"' % approach)
 
-def fit(data, covariances=None, I0=set(), I_candidates=None, backward_phase=False, centered=True, ges_iterate=True, ges_phases=['forward', 'backward', 'turning'], ges_lambda=None, debug=0):
+def fit_rank(data, covariances=None, centered=True, ges_iterate=True, ges_phases=['forward', 'backward', 'turning'], ges_lambda=None, debug=0):
+    """
+    """
+    
+    print("Running GnIES") if debug else None
 
-    print("Running alternating UT-GES") if debug else None
+    # Fit with full I
+    p = data[0].shape[1]
+    e = len(data)
+    full_I = set(range(p))
+    score_class = FixedInterventionalScore(data, full_I, centered=centered, lmbda=ges_lambda)
+
+    if covariances is not None:
+        score_class._sample_covariances = covariances
+
+    def completion_algorithm(PDAG):
+        return utils.pdag_to_icpdag(PDAG, full_I)
+
+    current_estimate, current_score = ges.fit(
+        score_class, completion_algorithm, iterate=ges_iterate, debug=2 if debug > 1 else 0)
+
+    # Obtain an elimination ordering based on the variance of the
+    # noise-term variance estimates of each variable
+    assert utils.is_dag(current_estimate)
+    _, omegas = score_class._mle_full(current_estimate, [full_I] * e)
+    variances = np.var(omegas, axis=0)
+    order = np.argsort(variances)
+
+    # Prune the set of intervention targets according to the obtained
+    # ordering
+    print("  Pruning intervention targets with order", order) if debug else None
+    current_I = full_I
+    for i in order:
+        print("    Current I=%s (score = %0.2f)" % (current_I, current_score)) if debug else None
+        next_I = current_I - {i}
+        # Construct score class
+        score_class = FixedInterventionalScore(data, current_I, centered=centered, lmbda=ges_lambda)
+        if covariances is not None:
+            score_class._sample_covariances = covariances
+        # Set completion algorithm
+        def completion_algorithm(PDAG):
+            return utils.pdag_to_icpdag(PDAG, current_I)
+        # Fit modified GES
+        next_estimate, next_score = ges.fit(
+            score_class, completion_algorithm, iterate=ges_iterate, debug=2 if debug > 1 else 0)
+        if next_score >= current_score:
+            current_score, current_estimate, current_I = next_score, next_estimate, next_I
+        else:
+            break
+    # Return highest scoring estimate
+    return current_score, current_estimate, current_I, None
+
+
+        
+def fit_greedy(data, covariances=None, I0=set(), I_candidates=None, backward_phase=False, centered=True, ges_iterate=True, ges_phases=['forward', 'backward', 'turning'], ges_lambda=None, debug=0):
+    """
+    """
+
+    print("Running GnIES") if debug else None
     # Iteration 0: no interventions
     score_class = FixedInterventionalScore(data, I0, centered=centered, lmbda=ges_lambda)
     if covariances is not None:
@@ -52,7 +118,7 @@ def fit(data, covariances=None, I0=set(), I_candidates=None, backward_phase=Fals
     p = score_class.p
     history = []
     current_I = I0
-    I_candidates = set(range(p)) if I_candidates is None else I_candidates
+    I_candidates = set(range(p))
     phase = 'forward'
     while True:
         print("  Current I=%s (score = %0.2f)" % (current_I, current_score)) if debug else None
