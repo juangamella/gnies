@@ -1,3 +1,5 @@
+v0.1.0, 2022-07-07
+-- Implemented target selection by variance ranking; can be accessed by new parameter `approach` in the calls to gnies.fit; however, API of the function changed
 v0.0.4, 2022-06-24
 -- New parameter in gnies.fit to set lambda used by GES
 -- Fixed bug in example
