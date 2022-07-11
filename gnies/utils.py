@@ -1489,7 +1489,7 @@ def dag_to_icpdag(G, I, debug=False):
     return P
 
 
-def all_dags(pdag):
+def all_dags(pdag, max_combinations=None):
     """
     Given a PDAG, enumerate all its consistent extensions(DAGs).
 
@@ -1506,6 +1506,8 @@ def all_dags(pdag):
     """
     fro, to = np.where(only_undirected(pdag))
     undirected_edges = np.array(list(filter(lambda e: e[0] > e[1], zip(fro, to))))
+    if max_combinations is not None and 2**len(undirected_edges) > max_combinations:
+        raise ValueError("The number of different edge orientations (%d) is over the value given for max_combinations (%d)" % (2**len(undirected_edges), max_combinations))
     assert len(undirected_edges) == np.sum(only_undirected(pdag)) / 2
     if len(undirected_edges) == 0:
         return np.array([pdag.copy()])

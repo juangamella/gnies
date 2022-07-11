@@ -775,6 +775,18 @@ class UtilsTests(unittest.TestCase):
             self.assertTrue((dags[0] == A).all())
             self.assertIsInstance(dags, np.ndarray)
 
+    def test_all_dags_limit(self):
+        A = np.array([[0, 1, 0],
+                      [0, 0, 1],
+                      [0, 0, 0]])
+        cpdag = utils.dag_to_cpdag(A)
+        try:
+            utils.all_dags(cpdag, max_combinations=1)
+            self.fail()
+        except ValueError as e:
+            print("OK :", e)
+            
+
     def test_all_dags_1(self):
         # PBT:
         # For a PDAG P
