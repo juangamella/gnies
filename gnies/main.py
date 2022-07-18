@@ -38,15 +38,40 @@ import numpy as np
 # Public API
 
 
-def fit_greedy(
+def fit(
     data,
-    covariances=None,
+    approach="greedy",
+    # Parameters used for greedy approach
     I0=set(),
     phases=["forward", "backward"],
-    centered=True,
+    # Parameters used for rank approach
+    direction="forward",
+    # Parameters used by inner-procedure (modified GES)
     ges_iterate=True,
     ges_phases=["forward", "backward", "turning"],
     ges_lambda=None,
+    # Other parameters
+    covariances=None,
+    centered=True,
+    debug=0,
+):
+    if approach == "greedy":
+        return fit_greedy(data, I0, phases, ges_iterate, ges_phases, ges_lambda, centered, covariances, debug)
+    elif approach == "rank":
+        return fit_rank(data, direction, ges_iterate, ges_phases, ges_lambda, centered, covariances, debug)
+    else:
+        raise ValueError('Invalid value "%s" for parameter "approach"' % approach)
+
+
+def fit_greedy(
+    data,
+    I0=set(),
+    phases=["forward", "backward"],
+    ges_iterate=True,
+    ges_phases=["forward", "backward", "turning"],
+    ges_lambda=None,
+    centered=True,
+    covariances=None,
     debug=0,
 ):
     """Run the outer procedure of GnIES, greedily adding/removing
@@ -103,11 +128,11 @@ def fit_greedy(
 def fit_rank(
     data,
     direction="forward",
-    covariances=None,
-    centered=True,
     ges_iterate=True,
     ges_phases=["forward", "backward", "turning"],
     ges_lambda=None,
+    centered=True,
+    covariances=None,
     debug=0,
 ):
     """Run the outer procedure of GnIES; instead of greedily
