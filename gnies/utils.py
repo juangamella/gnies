@@ -144,6 +144,48 @@ def ch(i, A):
     return set(np.where(np.logical_and(A[i, :] != 0, A[:, i] == 0))[0])
 
 
+def an(i, A):
+    # TODO: This will break if Python's max stack depth is reached
+    """The ancestors of i in A.
+
+    Parameters
+    ----------
+    A : np.array
+        the adjacency matrix of the graph, where A[i,j] != 0 => i -> j
+        and A[i,j] != 0 & A[j,i] != 0 => i - j.
+
+    Returns
+    -------
+    nodes : set of ints
+        the ancestor nodes
+    """
+    ancestors = pa(i, A)
+    for j in pa(i, A):
+        ancestors |= an(j, A)
+    return ancestors
+
+
+def desc(i, A):
+    # TODO: This will break if Python's max stack depth is reached
+    """The descendants of i in A.
+
+    Parameters
+    ----------
+    A : np.array
+        the adjacency matrix of the graph, where A[i,j] != 0 => i -> j
+        and A[i,j] != 0 & A[j,i] != 0 => i - j.
+
+    Returns
+    -------
+    nodes : set of ints
+        the descendant nodes
+    """
+    descendants = {i}
+    for j in ch(i, A):
+        descendants |= desc(j, A)
+    return descendants
+
+
 def is_clique(S, A):
     """Check if the subgraph of A induced by nodes S is a clique.
 
@@ -203,7 +245,6 @@ def chain_graph(p):
     ix = np.arange(p - 1)
     A[ix, ix + 1] = 1
     return A
-
 
 def is_chain_graph(A):
     """Check whether the given DAG adjacency corresponds to a chain
@@ -415,7 +456,6 @@ def semi_directed_paths(fro, to, A):
             next_to_visit = list(accessible[next_node] - set(visited) - {current_node})
             stack = [(next_node, visited + [current_node], next_to_visit)] + stack
     return paths
-
 
 def separates(S, A, B, G):
     """Returns true if the set S separates A from B in G, i.e. if all
