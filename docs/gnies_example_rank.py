@@ -14,7 +14,7 @@ data = [
 ]
 
 # Run GnIES
-gnies.fit(data, approach="rank", direction="backward", debug=1)
+gnies.fit_rank(data, debug=1)
 
 # Run GnIES
-gnies.fit(data, debug=1)
+gnies.fit_rank(data, direction="backward", debug=1)

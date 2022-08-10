@@ -350,6 +350,17 @@ class UtilsTests(unittest.TestCase):
             paths_nx = list(nx.algorithms.all_simple_paths(G, y, x))
             self.assertEqual(sorted(paths_nx), sorted(paths_own))
 
+    def test_semi_directed_paths_4(self):
+        # Test that there exist no paths between a node and those who
+        # appear before it in the topological ordering of a DAG
+        for i in range(100):
+            A = sempler.generators.dag_avg_deg(20, 3)
+            ordering = utils.topological_ordering(A)
+            ordering.reverse()
+            for i, fro in enumerate(ordering):
+                for to in ordering[(i+1):]:
+                    self.assertEqual([], utils.semi_directed_paths(fro, to, A))
+                    
     def test_skeleton(self):
         # Test utils.skeleton
         skeleton = np.array([[0, 1, 1, 0],
@@ -775,6 +786,18 @@ class UtilsTests(unittest.TestCase):
             self.assertTrue((dags[0] == A).all())
             self.assertIsInstance(dags, np.ndarray)
 
+    def test_all_dags_limit(self):
+        A = np.array([[0, 1, 0],
+                      [0, 0, 1],
+                      [0, 0, 0]])
+        cpdag = utils.dag_to_cpdag(A)
+        try:
+            utils.all_dags(cpdag, max_combinations=1)
+            self.fail()
+        except ValueError as e:
+            print("OK :", e)
+            
+
     def test_all_dags_1(self):
         # PBT:
         # For a PDAG P
@@ -1194,6 +1217,83 @@ class UtilsTests(unittest.TestCase):
             self.assertEqual(1, len(imec))
             self.assertTrue((A == imec[0]).all())
 
+    def test_ancestors_1(self):
+        # Test that
+        #   - a node is not contained in its ancestors
+        #   - the nodes that come after a node in the ordering
+        #     do not form part of its ancestors
+        #   - the parents of a node are contained in its ancestors
+        #   - its children are not
+        #   - a node is a descendant of its ancestors
+        G = 50
+        p = 20
+        for i in range(G):
+            A = sempler.generators.dag_avg_deg(p, 3, 1, 1)
+            ordering = utils.topological_ordering(A)
+            for i, node in enumerate(ordering):
+                ancestors = utils.an(node, A)
+                self.assertNotIn(node, ancestors)
+                self.assertEqual(set(), ancestors & set(ordering[i:]))
+                self.assertTrue(utils.pa(node, A) <= ancestors)
+                self.assertEqual(set(), utils.ch(node, A) & ancestors)
+                for j in ancestors:
+                    self.assertTrue(node in utils.desc(j, A))
+
+    def test_ancestors_2(self):
+        A = np.array([[0, 0, 1, 0, 0, 0, 0],
+                      [0, 0, 1, 1, 0, 0, 0],
+                      [0, 0, 0, 1, 0, 0, 0],
+                      [0, 0, 0, 0, 0, 0, 1],
+                      [0, 0, 0, 0, 0, 1, 0],
+                      [0, 0, 0, 0, 0, 0, 1],
+                      [0, 0, 0, 0, 0, 0, 0]])
+        ancestors = [set(),
+                     set(),
+                     {0,1},
+                     {0,1,2},
+                     set(),
+                     {4},
+                     {0,1,2,3,4,5}]
+        for i, truth in enumerate(ancestors):
+            self.assertEqual(truth, utils.an(i, A))
+
+    def test_descendants_1(self):
+        # Test that
+        #   - a node is always contained in its descendants
+        #   - the children of a node are contained in its descendants
+        #   - its parents are not
+        #   - a node is an ancestor of its descendants
+        G = 50
+        p = 20
+        for i in range(G):
+            A = sempler.generators.dag_avg_deg(p, 3, 1, 1)
+            ordering = utils.topological_ordering(A)
+            for i, node in enumerate(ordering):
+                descendants = utils.desc(node, A)
+                self.assertIn(node, descendants)
+                self.assertTrue(utils.ch(node, A) <= descendants)
+                self.assertEqual(set(), utils.pa(node, A) & descendants)
+                for j in descendants:
+                    if node != j:
+                        self.assertTrue(node in utils.an(j, A))
+
+    def test_descendants_2(self):
+        A = np.array([[0, 0, 1, 0, 0, 0, 0],
+                      [0, 0, 1, 1, 0, 0, 0],
+                      [0, 0, 0, 1, 0, 0, 0],
+                      [0, 0, 0, 0, 0, 0, 1],
+                      [0, 0, 0, 0, 0, 1, 0],
+                      [0, 0, 0, 0, 0, 0, 1],
+                      [0, 0, 0, 0, 0, 0, 0]])
+        descendants = [{0,2,3,6},
+                       {1,2,3,6},
+                       {2,3,6},
+                       {3,6},
+                       {4,5,6},
+                       {5,6},
+                       {6}]
+        for i, truth in enumerate(descendants):
+            self.assertEqual(truth, utils.desc(i, A))
 
 def same_elements(A, B):
     """Check that two arrays have the same elements (in same or different

@@ -14,7 +14,10 @@ data = [
 ]
 
 # Run GnIES
-gnies.fit(data, approach="rank", direction="backward", debug=1)
+gnies.fit_greedy(data, phases=["forward"], debug=1)
 
 # Run GnIES
-gnies.fit(data, debug=1)
+gnies.fit_greedy(data, phases=["forward", "backward"], debug=1)
+
+# Run GnIES
+gnies.fit_greedy(data, phases=["backward"], debug=1)
