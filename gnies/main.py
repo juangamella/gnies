@@ -40,6 +40,7 @@ import numpy as np
 
 def fit(
     data,
+    lmbda=None,
     approach="greedy",
     # Parameters used for greedy approach
     I0=set(),
@@ -49,41 +50,135 @@ def fit(
     # Parameters used by inner-procedure (modified GES)
     ges_iterate=True,
     ges_phases=["forward", "backward", "turning"],
-    ges_lambda=None,
-    # Other parameters
-    covariances=None,
-    centered=True,
-    debug=0,
+    debug=0
 ):
+    """Runs the GnIES algorithm on the given data, producing an estimate
+    of the I-equivalence class and the intervention targets.
+
+    Parameters
+    ----------
+    data : list of numpy.ndarray
+        A list with the samples from the different environment, where
+        each sample is an array with columns corresponding to
+        variables and rows to observations.
+    lmbda : float, default=None
+        The penalization parameter for the penalized-likelihood
+        score. If `None`, the BIC penalization is chosen, that is,
+        `0.5 * log(N)` where `N` is the total number of observations,
+        pooled across environments.
+    approach : {'greedy', 'rank'}, default='greedy'
+        The approach used by the outer procedure of GnIES. 'greedy'
+        means that intervention targets are greedily added/removed;
+        'rank' means that an ordering is found by first fitting a
+        model with `I={1,...,p}`, and targets are added/removed in
+        this order.
+    I0 : set, default=set()
+        If the 'greedy' approach is selected, specifies the initial
+        set of intervention targets, to which targets are
+        added/removed.
+    phases : [{'forward', 'backward'}*], default=['forward', 'backward']
+        If the 'greedy' approach is selected, specifies which phases
+        of the outer procedure are run.
+    direction : {'forward', 'backward'}, default='forward'
+        If the 'rank' approach is selected: if 'forward', we start
+        with an empty intervention set and add targets according to
+        the found ordering. If 'backward', we start with the full set
+        and remove targets instead.
+    ges_iterate : bool, default=False
+        Indicates whether the phases of the inner procedure (modified
+        GES) should be iterated more than once.
+    ges_phases : [{'forward', 'backward', 'turning'}*], optional
+        Which phases of the inner procedure (modified GES) are run,
+        and in which order. Defaults to `['forward', 'backward',
+        'turning']`.
+    debug : int, default=0
+        If larger than 0, debug are traces printed. Higher values
+        correspond to increased verbosity.
+
+    Returns
+    -------
+    score : float
+        The penalized likelihood-score of the GnIES estimate.
+    icpdag : numpy.ndarray
+        The I-CPDAG representing the estimated I-equivalence class,
+        where `icpdag[i,j] != 0` implies the edge `i -> j` and
+        `icpdag[i,j] != 0 & icpdag[j,i] != 0` implies the edge `i -
+        j`.
+    I : set of ints
+        The estimate of the intervention targets.
+
+    Raises
+    ------
+    ValueError:
+        If an invalid value is selected for the `approach` parameter.
+
+    """
     if approach == "greedy":
-        return fit_greedy(data, I0, phases, ges_iterate, ges_phases, ges_lambda, centered, covariances, debug)
+        return fit_greedy(data, lmbda, I0, phases, ges_iterate, ges_phases, debug)
     elif approach == "rank":
-        return fit_rank(data, direction, ges_iterate, ges_phases, ges_lambda, centered, covariances, debug)
+        return fit_rank(data, lmbda, direction, ges_iterate, ges_phases, debug)
     else:
         raise ValueError('Invalid value "%s" for parameter "approach"' % approach)
 
 
 def fit_greedy(
     data,
+    lmbda,
     I0=set(),
     phases=["forward", "backward"],
     ges_iterate=True,
     ges_phases=["forward", "backward", "turning"],
-    ges_lambda=None,
-    centered=True,
-    covariances=None,
     debug=0,
 ):
-    """Run the outer procedure of GnIES, greedily adding/removing
+    """Run the outer procedure of GnIES by greedily adding/removing
     variables until the score does not improve.
 
+    Parameters
+    ----------
+    data : list of numpy.ndarray
+        A list with the samples from each environment, where each
+        sample is an array with columns corresponding to variables and
+        rows to observations.
+    lmbda : float, default=None
+        The penalization parameter for the penalized-likelihood
+        score. If `None`, the BIC penalization is chosen, that is,
+        `0.5 * log(N)` where `N` is the total number of observations,
+        pooled across environments.
+    I0 : set, default=set()
+        The initial set of intervention targets, to which targets are
+        added/removed.
+    phases : [{'forward', 'backward'}*], default=['forward', 'backward']
+        Specifies which phases of the outer procedure are run.
+    ges_phases : [{'forward', 'backward', 'turning'}*], optional
+        Which phases of the inner procedure (modified GES) are run,
+        and in which order. Defaults to `['forward', 'backward',
+        'turning']`.
+    ges_iterate : bool, default=False
+        Indicates whether the phases of the inner procedure (modified
+        GES) should be iterated more than once.
+    debug : int, default=0
+        If larger than 0, debug are traces printed. Higher values
+        correspond to increased verbosity.
+
+    Returns
+    -------
+    score : float
+        The penalized likelihood-score of the GnIES estimate.
+    icpdag : numpy.ndarray
+        The I-CPDAG representing the estimated I-equivalence class,
+        where `icpdag[i,j] != 0` implies the edge `i -> j` and
+        `icpdag[i,j] != 0 & icpdag[j,i] != 0` implies the edge `i -
+        j`.
+    I : set of ints
+        The estimate of the intervention targets.
     """
 
     print("Running GnIES with greedy phases %s" % phases) if debug else None
-
     # Inner procedure parameters
+    centered = True
+    covariances = None
     params = {
-        "lmbda": ges_lambda,
+        "lmbda": lmbda,
         "phases": ges_phases,
         "iterate": ges_iterate,
         "centered": centered,
@@ -127,24 +222,63 @@ def fit_greedy(
 
 def fit_rank(
     data,
+    lmbda=None,
     direction="forward",
     ges_iterate=True,
     ges_phases=["forward", "backward", "turning"],
-    ges_lambda=None,
-    centered=True,
-    covariances=None,
     debug=0,
 ):
     """Run the outer procedure of GnIES; instead of greedily
     adding/removing intervention targets, use the ordering implied by
     the variance of the noise-term-variance estimates of each
-    variable.
+    variable. The ordering is found by first fitting a model allowing
+    interventions on all targets.
+
+    Parameters
+    ----------
+    data : list of numpy.ndarray
+        A list with the samples from each environment, where each
+        sample is an array with columns corresponding to variables and
+        rows to observations.
+    lmbda : float, default=None
+        The penalization parameter for the penalized-likelihood
+        score. If `None`, the BIC penalization is chosen, that is,
+        `0.5 * log(N)` where `N` is the total number of observations,
+        pooled across environments.
+    direction : {'forward', 'backward'}, default='forward'
+        If 'forward', we start with an empty intervention set and add
+        targets according to the found ordering. If 'backward', we
+        start with the full set and remove targets.
+    ges_phases : [{'forward', 'backward', 'turning'}*], optional
+        Which phases of the inner procedure (modified GES) are run,
+        and in which order. Defaults to `['forward', 'backward',
+        'turning']`.
+    ges_iterate : bool, default=False
+        Indicates whether the phases of the inner procedure (modified
+        GES) should be iterated more than once.
+    debug : int, default=0
+        If larger than 0, debug are traces printed. Higher values
+        correspond to increased verbosity.
+
+    Returns
+    -------
+    score : float
+        The penalized likelihood-score of the GnIES estimate.
+    icpdag : numpy.ndarray
+        The I-CPDAG representing the estimated I-equivalence class,
+        where `icpdag[i,j] != 0` implies the edge `i -> j` and
+        `icpdag[i,j] != 0 & icpdag[j,i] != 0` implies the edge `i -
+        j`.
+    I : set of ints
+        The estimate of the intervention targets.
 
     """
 
     print("Running GnIES with %s-rank approach" % direction) if debug else None
 
     # Inner procedure parameters
+    centered = True
+    covariances = None
     params = {
         "lmbda": ges_lambda,
         "phases": ges_phases,
