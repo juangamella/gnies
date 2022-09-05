@@ -1,4 +1,4 @@
-# Copyright 2021 Juan L Gamella
+# Copyright 2022 Juan L Gamella
 
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -58,7 +58,7 @@ def fit(
     Parameters
     ----------
     data : list of numpy.ndarray
-        A list with the samples from the different environment, where
+        A list with the samples from the different environments, where
         each sample is an array with columns corresponding to
         variables and rows to observations.
     lmbda : float, default=None
@@ -80,10 +80,11 @@ def fit(
         If the 'greedy' approach is selected, specifies which phases
         of the outer procedure are run.
     direction : {'forward', 'backward'}, default='forward'
-        If the 'rank' approach is selected: if 'forward', we start
-        with an empty intervention set and add targets according to
-        the found ordering. If 'backward', we start with the full set
-        and remove targets instead.
+        If the 'rank' approach is selected, specifies whether we add or
+        remove variables: if 'forward', we start with an empty
+        intervention set and add targets according to the found
+        ordering; if 'backward', we start with the full set and remove
+        targets instead.
     ges_iterate : bool, default=False
         Indicates whether the phases of the inner procedure (modified
         GES) should be iterated more than once.
@@ -98,7 +99,7 @@ def fit(
     Returns
     -------
     score : float
-        The penalized likelihood-score of the GnIES estimate.
+        The penalized likelihood score of the GnIES estimate.
     icpdag : numpy.ndarray
         The I-CPDAG representing the estimated I-equivalence class,
         where `icpdag[i,j] != 0` implies the edge `i -> j` and
@@ -163,7 +164,7 @@ def fit_greedy(
     Returns
     -------
     score : float
-        The penalized likelihood-score of the GnIES estimate.
+        The penalized likelihood score of the GnIES estimate.
     icpdag : numpy.ndarray
         The I-CPDAG representing the estimated I-equivalence class,
         where `icpdag[i,j] != 0` implies the edge `i -> j` and
@@ -175,14 +176,12 @@ def fit_greedy(
 
     print("Running GnIES with greedy phases %s" % phases) if debug else None
     # Inner procedure parameters
-    centered = True
-    covariances = None
     params = {
         "lmbda": lmbda,
         "phases": ges_phases,
         "iterate": ges_iterate,
-        "centered": centered,
-        "covariances": covariances,
+        "centered": True,
+        "covariances": None,
         "debug": 2 if debug > 1 else 0,
     }
 
@@ -263,7 +262,7 @@ def fit_rank(
     Returns
     -------
     score : float
-        The penalized likelihood-score of the GnIES estimate.
+        The penalized likelihood score of the GnIES estimate.
     icpdag : numpy.ndarray
         The I-CPDAG representing the estimated I-equivalence class,
         where `icpdag[i,j] != 0` implies the edge `i -> j` and
@@ -277,14 +276,12 @@ def fit_rank(
     print("Running GnIES with %s-rank approach" % direction) if debug else None
 
     # Inner procedure parameters
-    centered = True
-    covariances = None
     params = {
-        "lmbda": ges_lambda,
+        "lmbda": lmbda,
         "phases": ges_phases,
         "iterate": ges_iterate,
-        "centered": centered,
-        "covariances": covariances,
+        "centered": True,
+        "covariances": None,
         "debug": 2 if debug > 1 else 0,
     }
 
@@ -339,14 +336,45 @@ def _inner_procedure(
     covariances=None,
     debug=0,
 ):
-    """
-    Run the inner procedure of GnIES, i.e. GES with a modified score and completion algorithm.
+    """Run the inner procedure of GnIES, i.e. GES with a modified score
+    and completion algorithm.
 
     Parameters
     ----------
+    data : list of numpy.ndarray
+        A list with the samples from each environment, where each
+        sample is an array with columns corresponding to variables and
+        rows to observations.
+    I : set of ints
+        The intervention targets used for the inner procedure.
+    lmbda : float, default=None
+        The penalization parameter for the penalized-likelihood
+        score. If `None`, the BIC penalization is chosen, that is,
+        `0.5 * log(N)` where `N` is the total number of observations,
+        pooled across environments.
+    phases : [{'forward', 'backward', 'turning'}*], optional
+        Which phases of the inner procedure (modified GES) are run,
+        and in which order. Defaults to `['forward', 'backward',
+        'turning']`.
+    iterate : bool, default=False
+        Indicates whether the phases of the inner procedure (modified
+        GES) should be iterated more than once.
+    centered : bool, default=True
+        Whether the data is centered when computing the score
+        (`centered=True`), or the noise-term means are also estimated
+        respecting the constraints imposed by `I`.
+    covariances : numpy.ndarray, default=None
+        A `e x p x p` array where `e` is the number of environmnets
+        and `p` the number of variables. Specifies the scatter
+        matrices used to compute the score; if `None` (default), the
+        scatter matrices are the sample covariance matrices.
+    debug : int, default=0
+        If larger than 0, debug are traces printed. Higher values
+        correspond to increased verbosity.
 
     Returns
     -------
+
     """
     # Construct score class and completion algorithm
     score_class = FixedInterventionalScore(data, I, centered=centered, lmbda=lmbda)
