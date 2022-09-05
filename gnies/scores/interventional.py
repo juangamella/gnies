@@ -303,9 +303,9 @@ class InterventionalScore(DecomposableScore):
 
 class FixedInterventionalScore(InterventionalScore):
 
-    def __init__(self, data, I, centered=True, fine_grained=False, lmbda=None, tol=1e-16, max_iter=10, debug=0):
+    def __init__(self, data, I, centered=True, fine_grained=False, lmbda=None, tol=1e-16, max_iter=10):
         self.I = I
-        super().__init__(data, centered, fine_grained, lmbda, tol, max_iter, debug)
+        super().__init__(data, centered, fine_grained, lmbda, tol, max_iter)
 
     def full_score(self, A):
         return super().full_score(A, self.I)
