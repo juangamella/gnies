@@ -41,7 +41,7 @@ import pickle
 import time
 
 from termcolor import colored
-from gnies.scores.experimental import ExperimentalScore
+from gnies.scores import InterventionalScore
 
 NUM_GRAPHS = 10
 
@@ -90,7 +90,7 @@ class Assumption1Tests(unittest.TestCase):
         data.append(scm.sample(n, shift_interventions=I))
 
     # Set up score instance
-    coarse_score = ExperimentalScore(
+    coarse_score = InterventionalScore(
         data, fine_grained=False, centered=False, max_iter=100)
 
     data = None
@@ -175,7 +175,7 @@ class Assumption4Tests(unittest.TestCase):
         population_covariances.append(scm.sample(population=True, shift_interventions=I).covariance)
 
     # Set up score instance
-    coarse_score = ExperimentalScore(
+    coarse_score = InterventionalScore(
         data, fine_grained=False, centered=True, max_iter=100, lmbda=0)
     coarse_score._sample_covariances = np.array(population_covariances)
 

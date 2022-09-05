@@ -38,9 +38,9 @@ import sempler.generators
 import gnies.utils as utils
 import time
 
-import gnies.scores.experimental as experimental
-from gnies.scores.experimental import ExperimentalScore
-from gnies.scores.experimental import FixedInterventionalScore
+import gnies.scores.interventional as interventional
+from gnies.scores import InterventionalScore
+from gnies.scores import FixedInterventionalScore
 
 # ---------------------------------------------------------------------
 # Tests for the l0-penalized scores
@@ -88,31 +88,31 @@ class ScoreTests(unittest.TestCase):
 
     # ------------------------------------------------------
     # White-box tests:
-    #   testing the inner workings of the gnies.scores.experimental module, e.g. the
+    #   testing the inner workings of the gnies.scores.interventional module, e.g. the
     #   intermediate functions used to compute the likelihoods
 
     def test_ddof(self):
         A = np.zeros((self.p, self.p))
         # If no interventions are done, there should be p variances,
         # no matter the number of environments
-        self.assertEqual(self.p, experimental.ddof_full(A, [set()]))
-        self.assertEqual(self.p, experimental.ddof_full(A, [set()] * 2))
-        self.assertEqual(self.p, experimental.ddof_full(A, [set()] * 3))
+        self.assertEqual(self.p, interventional.ddof_full(A, [set()]))
+        self.assertEqual(self.p, interventional.ddof_full(A, [set()] * 2))
+        self.assertEqual(self.p, interventional.ddof_full(A, [set()] * 3))
         # If intercept is used
-        self.assertEqual(self.p * 2, experimental.ddof_full(A, [set()] * 3, False))
+        self.assertEqual(self.p * 2, interventional.ddof_full(A, [set()] * 3, False))
         # A few more
         I = [{1, 2, 4}, {1, 3, 4}, {2, 4}]
         # 1 for x=0, 3 for x=1, 3 for x=2, 2 for x=3, 3 for x=4
         # i.e a total of 1 + 3 + 3 + 2 + 3 = 12
-        self.assertEqual(12, experimental.ddof_full(A, I))
-        self.assertEqual(24, experimental.ddof_full(A, I, False))
+        self.assertEqual(12, interventional.ddof_full(A, I))
+        self.assertEqual(24, interventional.ddof_full(A, I, False))
         # Same but for A with 5 edges
-        self.assertEqual(17, experimental.ddof_full(self.true_A, I))
+        self.assertEqual(17, interventional.ddof_full(self.true_A, I))
         # Test decomposability
         acc = 0
         for j in range(self.p):
             pa = utils.pa(j, self.true_A)
-            acc += experimental.ddof_local(j, pa, I)
+            acc += interventional.ddof_local(j, pa, I)
         self.assertEqual(17, acc)
 
     def test_ddof_decomposability(self):
@@ -124,16 +124,16 @@ class ScoreTests(unittest.TestCase):
             int_sizes = np.random.choice(range(1, p + 1), e)
             I = [set(np.random.choice(range(p), size)) for size in int_sizes]
             # Without intercept
-            full_ddof = experimental.ddof_full(A, I)
+            full_ddof = interventional.ddof_full(A, I)
             acc = 0
             for j in range(p):
-                acc += experimental.ddof_local(j, utils.pa(j, A), I)
+                acc += interventional.ddof_local(j, utils.pa(j, A), I)
             self.assertEqual(full_ddof, acc)
             # With intercept
-            full_ddof = experimental.ddof_full(A, I, False)
+            full_ddof = interventional.ddof_full(A, I, False)
             acc = 0
             for j in range(p):
-                acc += experimental.ddof_local(j, utils.pa(j, A), I, False)
+                acc += interventional.ddof_local(j, utils.pa(j, A), I, False)
             self.assertEqual(full_ddof, acc)
 
     def test_score_decomposability_fine(self):
@@ -157,7 +157,7 @@ class ScoreTests(unittest.TestCase):
         # Test that score is the same when computed locally or for
         # the whole graph
         for centered in [True, False]:
-            score = ExperimentalScore(self.int_data, fine_grained=True, centered=centered)
+            score = InterventionalScore(self.int_data, fine_grained=True, centered=centered)
             for A in graphs:
                 for I in interventions:
                     print("\n\nInterventions set (fine): ", I)
@@ -192,7 +192,7 @@ class ScoreTests(unittest.TestCase):
         # Test that score is the same when computed locally or for
         # the whole graph
         for centered in [True, False]:
-            score = ExperimentalScore(self.int_data, fine_grained=False, centered=centered)
+            score = InterventionalScore(self.int_data, fine_grained=False, centered=centered)
             for A in graphs:
                 for I in interventions:
                     print("\n\nInterventions set (coarse): ", I)
@@ -210,7 +210,7 @@ class ScoreTests(unittest.TestCase):
 
     def test_mle_1_centered(self):
         # Check that ML estimates are reasonably close to the true model
-        score = ExperimentalScore(self.int_data, lmbda=None)
+        score = InterventionalScore(self.int_data, lmbda=None)
         I = self.true_targets
         # Full MLE
         B_full, omegas_full = score._mle_full(self.true_A, I)
@@ -232,7 +232,7 @@ class ScoreTests(unittest.TestCase):
 
     def test_mle_1_uncentered(self):
         # Check that ML estimates are reasonably close to the true model
-        score = ExperimentalScore(self.int_data, centered=False, lmbda=None)
+        score = InterventionalScore(self.int_data, centered=False, lmbda=None)
         I = self.true_targets
         # Full MLE
         B_full, nus_full, omegas_full = score._mle_full(self.true_A, I)
@@ -281,7 +281,7 @@ class ScoreTests(unittest.TestCase):
         # ----------------------------------------
         # Test behaviour of MLE
         start = time.time()
-        score = ExperimentalScore(self.int_data, lmbda=None)
+        score = InterventionalScore(self.int_data, lmbda=None)
         for A in graphs:
             for I in interventions:
                 # print("\n\nInterventions set: ", I)
@@ -311,9 +311,9 @@ class ScoreTests(unittest.TestCase):
                         self.assertEqual(1, len(np.unique(omegas_local[not_intervened_in, j])))
                         self.assertEqual(1, len(np.unique(omegas_full[not_intervened_in, j])))
                     # Check DDOF
-                    self.assertEqual(experimental.ddof_local(j, set(), I),
+                    self.assertEqual(interventional.ddof_local(j, set(), I),
                                      len(np.unique(omegas_local[:, j])))
-                    self.assertEqual(experimental.ddof_local(j, set(), I),
+                    self.assertEqual(interventional.ddof_local(j, set(), I),
                                      len(np.unique(omegas_full[:, j])))
         print("Tested MLE behaviour (centered) for %d cases (%d graphs x %d intervention sets) (%0.2f s)" %
               ((G + 1) * (K + 1), G + 1, K + 1, time.time() - start))
@@ -341,7 +341,7 @@ class ScoreTests(unittest.TestCase):
         # ----------------------------------------
         # Test behaviour of MLE
         start = time.time()
-        score = ExperimentalScore(self.int_data, lmbda=None, centered=False)
+        score = InterventionalScore(self.int_data, lmbda=None, centered=False)
         for A in graphs:
             for I in interventions:
                 # print("\n\nInterventions set: ", I)
@@ -378,13 +378,13 @@ class ScoreTests(unittest.TestCase):
                         self.assertEqual(1, len(np.unique(nus_local[not_intervened_in, j])))
                         self.assertEqual(1, len(np.unique(nus_full[not_intervened_in, j])))
                     # Check DDOF
-                    self.assertEqual(experimental.ddof_local(j, set(), I),
+                    self.assertEqual(interventional.ddof_local(j, set(), I),
                                      len(np.unique(omegas_local[:, j])))
-                    self.assertEqual(experimental.ddof_local(j, set(), I),
+                    self.assertEqual(interventional.ddof_local(j, set(), I),
                                      len(np.unique(omegas_full[:, j])))
-                    self.assertEqual(experimental.ddof_local(j, set(), I),
+                    self.assertEqual(interventional.ddof_local(j, set(), I),
                                      len(np.unique(nus_local[:, j])))
-                    self.assertEqual(experimental.ddof_local(j, set(), I),
+                    self.assertEqual(interventional.ddof_local(j, set(), I),
                                      len(np.unique(nus_full[:, j])))
         print("Tested MLE behaviour (uncentered) for %d cases (%d graphs x %d intervention sets) (%0.2f s)" %
               ((G + 1) * (K + 1), G + 1, K + 1, time.time() - start))
@@ -409,8 +409,8 @@ class ScoreTests(unittest.TestCase):
         # Test that score is the same when computed locally or for
         # the whole graph
         for centered in [True, False]:
-            coarse_score = ExperimentalScore(self.int_data, fine_grained=False, centered=centered)
-            fine_score = ExperimentalScore(self.int_data, fine_grained=True, centered=centered)
+            coarse_score = InterventionalScore(self.int_data, fine_grained=False, centered=centered)
+            fine_score = InterventionalScore(self.int_data, fine_grained=True, centered=centered)
             for A in graphs:
                 for I in interventions:
                     # print("\n\nInterventions set (coarse): ", I)
@@ -445,7 +445,7 @@ class ScoreTests(unittest.TestCase):
         # Test behaviour of MLE
         data = [self.int_data[0], self.int_data[1]]
         for centered in [True, False]:
-            score = ExperimentalScore(data, centered=centered)
+            score = InterventionalScore(data, centered=centered)
             for A in graphs:
                 for t in targets:
                     if centered:
@@ -475,7 +475,7 @@ class ScoreTests(unittest.TestCase):
         # ----------------------------------------
         # Test
         true_sample_means = np.array([np.mean(X, axis=0) for X in self.int_data])
-        score = ExperimentalScore(self.int_data, fine_grained=True, centered=False)
+        score = InterventionalScore(self.int_data, fine_grained=True, centered=False)
         for A in graphs:
             B, noise_term_means, _ = score._mle_full(A, [set(range(self.p))] * self.e)
             sample_means = noise_term_means @ np.linalg.inv(np.eye(self.p) - B)
@@ -499,7 +499,7 @@ class ScoreTests(unittest.TestCase):
         graphs += [sempler.generators.dag_avg_deg(self.p, k) for _ in range(G)]
         # ----------------------------------------
         # Test
-        score = ExperimentalScore(self.int_data, fine_grained=True, centered=False)
+        score = InterventionalScore(self.int_data, fine_grained=True, centered=False)
         for A in graphs:
             B, noise_term_means, _ = score._mle_full(A, [set()] * self.e)
             sample_means = noise_term_means @ np.linalg.inv(np.eye(self.p) - B)
@@ -521,7 +521,7 @@ class ScoreTests(unittest.TestCase):
         # ----------------------------------------
         # Test
         true_sample_means = np.array([np.mean(X, axis=0) for X in self.int_data])
-        score = ExperimentalScore(self.int_data, fine_grained=True, centered=False)
+        score = InterventionalScore(self.int_data, fine_grained=True, centered=False)
         for A in graphs:
             for j in range(self.p):
                 pa = list(np.where(A[:, j] != 0)[0])
@@ -549,8 +549,8 @@ class ScoreTests(unittest.TestCase):
         I = [set(range(self.p))] * self.e
         for lmbda in [0, None]:
             for A in graphs:
-                centered = ExperimentalScore(self.int_data, lmbda=lmbda, centered=True)
-                uncentered = ExperimentalScore(self.int_data, lmbda=lmbda, centered=False)
+                centered = InterventionalScore(self.int_data, lmbda=lmbda, centered=True)
+                uncentered = InterventionalScore(self.int_data, lmbda=lmbda, centered=False)
                 self.assertTrue(centered.centered)
                 self.assertFalse(uncentered.centered)
                 # Check full score
@@ -584,7 +584,7 @@ class ScoreTests(unittest.TestCase):
     #     # ----------------------------------------
     #     # Test
     #     for centered in [True, False]:
-    #         score = ExperimentalScore(self.int_data, lmbda=0, debug=0,
+    #         score = InterventionalScore(self.int_data, lmbda=0, debug=0,
     #                                   centered=centered, max_iter=500)
     #         for k, A in enumerate(graphs):
     #             print("Graph", k)
@@ -625,7 +625,7 @@ class ScoreTests(unittest.TestCase):
     #     # ----------------------------------------
     #     # Test
     #     for centered in [True, False]:
-    #         score = ExperimentalScore(self.int_data, lmbda=0, debug=0,
+    #         score = InterventionalScore(self.int_data, lmbda=0, debug=0,
     #                                   centered=centered, max_iter=500)
     #         for k, A in enumerate(graphs):
     #             print("Graph", k)
@@ -683,7 +683,7 @@ class FixedInterventionTests(unittest.TestCase):
                 # targets
                 graphs = [sempler.generators.dag_avg_deg(
                     p, k, 0, 3) for _ in range(graphs_to_score)]
-                coarse_score = ExperimentalScore(XX, fine_grained=False, centered=centered)
+                coarse_score = InterventionalScore(XX, fine_grained=False, centered=centered)
                 for j in range(tests_per_case):
                     print("  intervention set %d" % j)
                     I = set(sempler.generators.intervention_targets(p, 1, (0, 10))[0])
@@ -725,7 +725,7 @@ class FixedInterventionTests(unittest.TestCase):
                 # targets
                 graphs = [sempler.generators.dag_avg_deg(
                     p, k, 0, 3) for _ in range(graphs_to_score)]
-                fine_score = ExperimentalScore(XX, fine_grained=True, centered=centered)
+                fine_score = InterventionalScore(XX, fine_grained=True, centered=centered)
                 for j in range(tests_per_case):
                     print("  intervention set %d" % j)
                     I = [set(targets)
