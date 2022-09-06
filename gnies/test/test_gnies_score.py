@@ -835,11 +835,12 @@ class ImplementationChangeTests(unittest.TestCase):
         print("Diff. in local scores - min :", diff_local.min(), "max :", diff_local.max())
         # print(diff_local)
         # print(diff_local[mask])
-        self.assertTrue((computed_full_scores == full_scores).all())
-        self.assertTrue((computed_local_scores == local_scores).all())
+        thresh = 1e-11
+        self.assertLess(abs(diff_full).max(), thresh)
+        self.assertLess(abs(diff_local).max(), thresh)
 
 
-def score_graphs(graphs_file, targets_file, datasets_file, debug=True):
+def score_graphs(graphs_file, targets_file, datasets_file, debug=False):
     # Load files
     graphs = np.load(graphs_file)
     targets = np.load(targets_file, allow_pickle=True)

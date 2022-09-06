@@ -321,7 +321,6 @@ def _omegas_from_b(j, pa, b, I, sample_covariances, pooled_covariance):
         omega = pooled_covariance[j,j] - pooled_covariance[j,pa] @ b
         omegas = np.ones(len(sample_covariances), dtype=float) * omega
     if j in I:
-        # TODO: Can vectorize this
         p = len(pooled_covariance)
         I_B = -_embedd(b, p, pa)
         I_B[j] = 1

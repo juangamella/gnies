@@ -770,7 +770,7 @@ class ImplementationChangeTests(unittest.TestCase):
             graphs_to_score = []
             targets_to_score = []
             n_datasets = 1
-            n_graphs = 10
+            n_graphs = 100
 
             # Generate datasets
             n = 1000
@@ -831,7 +831,7 @@ class ImplementationChangeTests(unittest.TestCase):
         self.assertTrue((computed_local_scores == local_scores).all())
 
 
-def score_graphs(graphs_file, targets_file, datasets_file, debug=True):
+def score_graphs(graphs_file, targets_file, datasets_file, debug=False):
     # Load files
     graphs = np.load(graphs_file)
     targets = np.load(targets_file, allow_pickle=True)
