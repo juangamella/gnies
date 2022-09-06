@@ -241,7 +241,7 @@ class GnIESScore(DecomposableScore):
 
     def _mle_local(self, j, pa):
         pa = sorted(pa)
-        b, omegas = _alternating_mle(j, pa, self.I, self._sample_covariances, self._pooled_covariance, self.n_obs, self.tol, self.max_iter, debug=0)
+        b, omegas = self._alternating_mle(j, pa, debug=0)
         b = _embedd(b, self.p, pa)
         if self.centered:
             return b, omegas
@@ -250,6 +250,89 @@ class GnIESScore(DecomposableScore):
             # sub_means = self._sample_means[:, [j] + pa]
             # nus = _noise_means_from_B(B, sub_I, sub_means, self.n_obs)[:, 0]
             # return b, nus, omegas
+
+    def _omegas_from_b(self, j, pa, b):
+        """Given the regression coefficients for the jth variable, compute the
+        variance of its noise terms.
+        """
+        # variable j has not received interventions: its noise-term
+        # variance is constant across environments
+        if j not in self.I:
+            omega = self._pooled_covariance[j, j] - self._pooled_covariance[j, pa] @ b
+            omegas = np.ones(self.e, dtype=float) * omega
+        if j in self.I:
+            I_B = -_embedd(b, self.p, pa)
+            I_B[j] = 1
+            omegas = I_B @ self._sample_covariances @ I_B
+            # for e,cov in enumerate(sample_covariances):
+            #     omegas[e] = cov[j,j] - cov[j,pa] @ b
+            #     # Why does the above (commented) not work?  Idea: We're
+            #     # not asking about the variance of the conditional
+            #     # distribution of Xj given its parents in environment e,
+            #     # as this would mean the regression coefficients would be
+            #     # allowed to change within environments. We want to know
+            #     # the variance of the residuals resulting from using the
+            #     # regression coefficients in B.
+        return omegas
+
+    def _b_from_omegas(self, j, pa, omegas):
+        """Regress j on its parents from the weighted covariance matrix,
+        where the covariance matrix from each environment is weighted by
+        the number of observation and the noise-term variance of j for
+        that environment.
+        """
+        # TODO: Can further optimize -> if j is in I, the noise-term
+        # variances (omegas) are the same across environments and thus
+        # the weighted covariance is simply the pooled covariance
+        # (computed in the class init)
+        # if j in self.I:
+        #     weighted_covariance = self._pooled_covariance
+        # else:
+        if j not in self.I:
+            weighted_covariance = self._pooled_covariance
+        else:
+            weights = self.n_obs / omegas
+            weights /= sum(weights)
+            weighted_covariance = np.sum(self._sample_covariances * np.reshape(weights, (self.e, 1, 1)), axis=0)
+        return _regress(j, pa, weighted_covariance)
+
+    def _alternating_mle(self, j, pa, debug=0):
+        # If j has no parents, can directly estimate omegas
+        if len(pa) == 0:
+            b = np.array([])
+            omegas = self._omegas_from_b(j, pa, b)
+            return b, omegas
+        else:
+            # Set starting point for optimization procedure
+            b_0 = _regress(j, pa, self._pooled_covariance)
+            omegas_0 = self._omegas_from_b(j, pa, b_0)
+
+            # Components for the alternating (EM-like) optimization procedure
+            # "Expectation" function: given b compute the noise-term variances
+            def e_func(b):
+                return self._omegas_from_b(j, pa, b)
+
+            # "Maximization" function: given variances of noise terms, compute B
+            def m_func(omegas):
+                return self._b_from_omegas(j, pa, omegas)
+
+            # Distance to check for convergence: max of L1 distance between
+            # successive b's and successive omegas
+            def dist(prev_b, prev_omegas, b, omegas):
+                return max(abs(b - prev_b).max(), abs(omegas - prev_omegas).max())
+
+            # Keep track of the objective function if debugging is desired
+            if debug:
+                def objective(B, omegas):
+                    return log_likelihood.local(j, b, omegas, self._sample_covariances, self.n_obs)
+            else:
+                objective = None
+
+            # Run procedure
+            print("    Running alternating optimization procedure") if debug else None
+            (b, omegas) = _em_like(e_func, m_func, b_0, omegas_0, dist,
+                                   tol=self.tol, max_iter=self.max_iter, objective=objective, debug=debug)
+            return b, omegas
 
 # --------------------------------------------------------------------
 # Functions for the alternating maximization procedure used to find
@@ -271,85 +354,11 @@ def _embedd(b, p, idx):
     return vector
 
 
-def _alternating_mle(j, pa, I, sample_covariances, pooled_covariance, n_obs, tol, max_iter, debug=0):
-    # If j has no parents, can directly estimate omegas
-    if len(pa) == 0:
-        b = np.array([])
-        omegas = _omegas_from_b(j, pa, b, I, sample_covariances, pooled_covariance)
-        return b, omegas
-    else:
-        # Set starting point for optimization procedure
-        b_0 = _regress(j, pa, pooled_covariance)
-        omegas_0 = _omegas_from_b(j, pa, b_0, I, sample_covariances, pooled_covariance)
-
-        # Components for the alternating (EM-like) optimization procedure
-        # "Expectation" function: given b compute the noise-term variances
-        def e_func(b):
-            return _omegas_from_b(j, pa, b, I, sample_covariances, pooled_covariance)
-
-        # "Maximization" function: given variances of noise terms, compute B
-        def m_func(omegas):
-            return _b_from_omegas(j, pa, omegas, sample_covariances, n_obs)
-
-        # Distance to check for convergence: max of L1 distance between
-        # successive b's and successive omegas
-        def dist(prev_b, prev_omegas, b, omegas):
-            return max(abs(b - prev_b).max(), abs(omegas - prev_omegas).max())
-
-        # Keep track of the objective function if debugging is desired
-        if debug:
-            def objective(B, omegas):
-                return log_likelihood.local(j, b, omegas, sample_covariances, n_obs)
-        else:
-            objective = None
-
-        # Run procedure
-        print("    Running alternating optimization procedure") if debug else None
-        (b, omegas) = _em_like(e_func, m_func, b_0, omegas_0, dist,
-                               tol=tol, max_iter=max_iter, objective=objective, debug=debug)
-        return b, omegas
 
 
 
-def _omegas_from_b(j, pa, b, I, sample_covariances, pooled_covariance):
-    """Given the regression coefficients for the jth variable, compute the
-    variance of its noise terms.
-    """
-    # variable j has not received interventions: its noise-term
-    # variance is constant across environments
-    if j not in I:
-        omega = pooled_covariance[j,j] - pooled_covariance[j,pa] @ b
-        omegas = np.ones(len(sample_covariances), dtype=float) * omega
-    if j in I:
-        p = len(pooled_covariance)
-        I_B = -_embedd(b, p, pa)
-        I_B[j] = 1
-        omegas = I_B @ sample_covariances @ I_B
-        # for e,cov in enumerate(sample_covariances):
-        #     omegas[e] = cov[j,j] - cov[j,pa] @ b
-        #     # Why does the above (commented) not work?  Idea: We're
-        #     # not asking about the variance of the conditional
-        #     # distribution of Xj given its parents in environment e,
-        #     # as this would mean the regression coefficients would be
-        #     # allowed to change within environments. We want to know
-        #     # the variance of the residuals resulting from using the
-        #     # regression coefficients in B.
-    return omegas
 
-def _b_from_omegas(j, pa, omegas, sample_covariances, n_obs):
-    """Regress j on its parents from the weighted covariance matrix,
-    where the covariance matrix from each environment is weighted by
-    the number of observation and the noise-term variance of j for
-    that environment.
-    """
-    # TODO: Can further optimize -> if j is in I, the noise-term
-    # variances (omegas) are the same across environments and thus the
-    # weighted covariance is simply the pooled covariance (computed in the class init)
-    e = len(sample_covariances)
-    weights = n_obs / omegas
-    weights /= sum(weights)
-    weighted_covariance = np.sum(sample_covariances * np.reshape(weights, (e, 1, 1)), axis=0)
-    return _regress(j, pa, weighted_covariance)
+
 
 def _noise_means_from_B(B, I, sample_means, n_obs):
     # TODO
