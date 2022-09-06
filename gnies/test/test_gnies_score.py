@@ -815,7 +815,7 @@ class ImplementationChangeTests(unittest.TestCase):
                 print('Saved targets to "%s"' % self.targets_file)
 
             # Compute and save scores
-            full_scores, local_scores = score_graphs(self.graphs_file, self.targets_file, self.datasets_file)
+            full_scores, local_scores = score_graphs(graphs_to_score, targets_to_score, datasets)
             with open(self.full_scores_file, 'wb') as f:
                 np.save(f, full_scores)
                 print('Saved full_scores to "%s"' % self.full_scores_file)
@@ -825,7 +825,11 @@ class ImplementationChangeTests(unittest.TestCase):
 
     def test_scores(self):
         debug = True
-        computed_full_scores, computed_local_scores, mask = score_graphs(self.graphs_file, self.targets_file, self.datasets_file)
+        # Load files
+        graphs = np.load(self.graphs_file)
+        targets = np.load(self.targets_file, allow_pickle=True)
+        datasets = np.load(self.datasets_file)
+        computed_full_scores, computed_local_scores, mask = score_graphs(graphs, targets, datasets)
         full_scores = np.load(self.full_scores_file)
         local_scores = np.load(self.local_scores_file)
         diff_full = (computed_full_scores - full_scores)
@@ -839,12 +843,39 @@ class ImplementationChangeTests(unittest.TestCase):
         #self.assertLess(abs(diff_full).max(), thresh)
         self.assertLess(abs(diff_local).max(), thresh)
 
+    def test_I_change(self):
+        """Check that the local scores remain the same when variables are not added to list of intervention targets"""
+        graphs = np.load(self.graphs_file)
+        p = graphs.shape[1]
+        datasets = np.load(self.datasets_file)
+        targets = [set(),
+                   {1},
+                   {1,2},
+                   {1,2,3,4},
+                   {1,2,3,4,5},
+                   {3,4,5},
+                   {4,5},
+                   {4}]
+        _, current_scores,_ = score_graphs(graphs, [targets[0]], datasets)
+        for i in range(1, len(targets)):
+            change = (targets[i-1] - targets[i]) | (targets[i] - targets[i-1])
+            constant = set(range(p)) - change
+            print("Comparing I = %s vs I = %s - change = %s" % (targets[i], targets[i-1], change))
+            _,next_scores,_ = score_graphs(graphs, [targets[i]], datasets)
+            print("Variables which changed")
+            for j in change:
+                diff = abs(next_scores[:,:,:,j] - current_scores[:,:,:,j])
+                print("  %d - max diff." % j, diff.max())
+                self.assertTrue((next_scores[:,:,:,j] != current_scores[:,:,:,j]).all())
+            print("Variables which didn't change")
+            for j in constant:
+                diff = abs(next_scores[:,:,:,j] - current_scores[:,:,:,j])
+                print("  %d - max diff." % j, diff.max())
+                self.assertTrue((next_scores[:,:,:,j] == current_scores[:,:,:,j]).all())
+            current_scores = next_scores
 
-def score_graphs(graphs_file, targets_file, datasets_file, debug=False):
-    # Load files
-    graphs = np.load(graphs_file)
-    targets = np.load(targets_file, allow_pickle=True)
-    datasets = np.load(datasets_file)
+
+def score_graphs(graphs, targets, datasets, debug=False):
     # Set up score arrays
     p = graphs.shape[1]
     full_scores = np.zeros((len(graphs), len(targets), len(datasets)), dtype=float)

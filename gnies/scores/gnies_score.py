@@ -85,7 +85,7 @@ class GnIESScore(DecomposableScore):
 
     """
 
-    def __init__(self, data, I, centered=True, lmbda=None, tol=1e-16, max_iter=10):
+    def __init__(self, data, I, centered=True, lmbda=None, tol=1e-16, max_iter=10, cache=True):
         """
         Creates a new instance of the score.
 
@@ -116,7 +116,7 @@ class GnIESScore(DecomposableScore):
             The maximum number of iterations for the alternating
             optimization procedure.
         """
-        super().__init__(data, cache=False)
+        super().__init__(data, cache=cache)
         self.I = I.copy()
         self.e = len(data)
         self.p = data[0].shape[1]
