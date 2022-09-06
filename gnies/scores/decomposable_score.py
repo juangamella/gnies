@@ -52,7 +52,7 @@ class DecomposableScore():
     def local_score(self, x, pa):
         """
         Return the local score of a given node and a set of
-        parents. If self.cache=True, will use previously computed
+        parents. If self._cache is defined, will use previously computed
         score if possible.
 
         Parameters

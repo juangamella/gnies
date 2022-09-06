@@ -116,7 +116,7 @@ class GnIESScore(DecomposableScore):
             The maximum number of iterations for the alternating
             optimization procedure.
         """
-        super().__init__(data, cache=True)
+        super().__init__(data, cache=False)
         self.I = I.copy()
         self.e = len(data)
         self.p = data[0].shape[1]
@@ -171,7 +171,7 @@ class GnIESScore(DecomposableScore):
     # def local_score(self, x, pa, I):
     #   already defined in parent class DecomposableScore, which calls _compute_local_score
 
-    def _compute_local_score(self, x, pa):
+    def _compute_local_score(self, j, pa):
         """
         Given a node and its parents, return the local l0-penalized
         log-likelihood of a collection of samples from different
@@ -180,7 +180,7 @@ class GnIESScore(DecomposableScore):
 
         Parameters
         ----------
-        x : int
+        j : int
             a node
         pa : set of ints
             the node's parents
@@ -194,15 +194,16 @@ class GnIESScore(DecomposableScore):
         # Compute MLE, with the local subgraph p -> x for p in pa
         #   Only do set -> list conversion once, as the ordering is not
         #   guaranteed to be consistent.
+        ddof = self.e if j in self.I else 1
         if self.centered:
-            b, omegas = self._mle_local(x, pa)
-            likelihood = log_likelihood.local(x, b, omegas, self._sample_covariances, self.n_obs)
+            b, omegas = self._mle_local(j, pa)
+            likelihood = -0.5 * ((1 + np.log(omegas)) * self.n_obs).sum()
         else:
-            b, nus, omegas = self._mle_local(x, pa)
-            likelihood = log_likelihood_means.local(x, b, nus, omegas, self._data)
+            b, nus, omegas = self._mle_local(j, pa)
+            likelihood = log_likelihood_means.local(j, b, nus, omegas, self._data)
         #  Note: the number of parameters is the number of parents (one
         #  weight for each) + one marginal variance/mean per environment for x
-        l0_term = self.lmbda * ddof_local(x, pa, self.I, self.e, centered=self.centered)
+        l0_term = self.lmbda * ddof_local(j, pa, self.I, self.e, centered=self.centered)
         score = likelihood - l0_term
         return score
 
