@@ -29,10 +29,11 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 from gnies.scores import FixedInterventionalScore
+from gnies.scores.gnies_score import GnIESScore as FixedInterventionalScore
 import gnies.utils as utils
 import ges
 import numpy as np
-
+import time
 
 # --------------------------------------------------------------------
 # Public API
@@ -124,7 +125,7 @@ def fit(
 
 def fit_greedy(
     data,
-    lmbda,
+    lmbda=None, 
     I0=set(),
     phases=["forward", "backward"],
     ges_iterate=True,
@@ -186,10 +187,10 @@ def fit_greedy(
     }
 
     # Iteration 0: initial set
-    current_estimate, current_score, score_class = _inner_procedure(data, I0, **params)
+    current_estimate, current_score, current_score_class = _inner_procedure(data, I0, **params)
 
     # Iterate
-    p = score_class.p
+    p = current_score_class.p
     current_I = I0
     full_I = set(range(p))
     phase = "forward"
@@ -204,14 +205,14 @@ def fit_greedy(
                 break
             for i in next_Is:
                 new_I = current_I | {i} if phase == "forward" else current_I - {i}
-                estimate, score, _ = _inner_procedure(data, new_I, **params)
+                estimate, score, new_score_class = _inner_procedure(data, new_I, previous_score=current_score_class, **params)
                 print("      Scored I=%s : %0.2f" % (new_I, score)) if debug else None
-                scores.append((score, new_I, estimate))
+                scores.append((score, new_I, estimate, new_score_class))
             # Pick the maximally scoring addition/removal
-            new_score, new_I, new_estimate = max(scores)
+            new_score, new_I, new_estimate, new_score_class = max(scores)
             # If the score was improved, repeat the greedy step
             if new_score >= current_score:
-                current_score, current_I, current_estimate = new_score, new_I, new_estimate
+                current_score, current_I, current_estimate, current_score_class = new_score, new_I, new_estimate, new_score_class
             # Otherwise, halt
             else:
                 print("    Score was not improved.") if debug else None
@@ -334,6 +335,7 @@ def _inner_procedure(
     iterate=True,
     centered=True,
     covariances=None,
+    previous_score=None,
     debug=0,
 ):
     """Run the inner procedure of GnIES, i.e. GES with a modified score
@@ -378,6 +380,13 @@ def _inner_procedure(
     """
     # Construct score class and completion algorithm
     score_class = FixedInterventionalScore(data, I, centered=centered, lmbda=lmbda)
+    if previous_score is not None:
+        # start = time.time()
+        change = (I - previous_score.I) | (previous_score.I - I)
+        old_cache = previous_score._cache
+        new_cache = dict((((j,pa),score) for ((j,pa),score) in old_cache.items() if j not in change))
+        score_class._cache = new_cache
+        # print("Used old cache - change = %s - (setup in %0.4f seconds)" % (change, time.time() - start))
     if covariances is not None:
         score_class._sample_covariances = covariances
 
