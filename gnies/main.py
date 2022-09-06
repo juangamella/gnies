@@ -125,7 +125,7 @@ def fit(
 
 def fit_greedy(
     data,
-    lmbda=None, 
+    lmbda=None,
     I0=set(),
     phases=["forward", "backward"],
     ges_iterate=True,
@@ -193,7 +193,7 @@ def fit_greedy(
     full_I = set(range(p))
     phase = "forward"
     for phase in phases:
-        print("  GnIES %s phase" % phase)
+        print("  GnIES %s phase" % phase) if debug else None
         while True:
             print("    Current I=%s (score = %0.2f)" % (current_I, current_score)) if debug else None
             scores = []
@@ -204,6 +204,7 @@ def fit_greedy(
             for i in next_Is:
                 new_I = current_I | {i} if phase == "forward" else current_I - {i}
                 score_class.set_I(new_I)
+                # score_class = FixedInterventionalScore(data, new_I, lmbda=lmbda)
                 estimate, score = _inner_procedure(score_class, new_I, **params)
                 print("      Scored I=%s : %0.2f" % (new_I, score)) if debug else None
                 scores.append((score, new_I, estimate))
@@ -277,11 +278,8 @@ def fit_rank(
 
     # Inner procedure parameters
     params = {
-        "lmbda": lmbda,
         "phases": ges_phases,
         "iterate": ges_iterate,
-        "centered": True,
-        "covariances": None,
         "debug": 2 if debug > 1 else 0,
     }
 
@@ -290,15 +288,17 @@ def fit_rank(
     p = data[0].shape[1]
     e = len(data)
     full_I = set(range(p))
-    current_estimate, current_score, score_class = _inner_procedure(data, full_I, **params)
+    score_class = FixedInterventionalScore(data, full_I, lmbda=lmbda)
+    current_estimate, current_score = _inner_procedure(score_class, full_I, **params)
     assert utils.is_dag(current_estimate)
-    _, omegas = score_class._mle_full(current_estimate, [full_I] * e)
+    _, omegas = score_class._mle_full(current_estimate)
     variances = np.var(omegas, axis=0)
     order = list(np.argsort(variances))
     # Setup for the greedy outer procedure
     if direction == "forward":
         current_I = set()
-        current_estimate, current_score, _ = _inner_procedure(data, current_I, **params)
+        score_class = FixedInterventionalScore(data, set(), lmbda=lmbda)
+        current_estimate, current_score = _inner_procedure(score_class, current_I, **params)
         verb = "Adding"
         order.reverse()
     elif direction == "backward":
@@ -313,7 +313,8 @@ def fit_rank(
     for i in order:
         print("    Current I=%s (score = %0.2f)" % (current_I, current_score)) if debug else None
         next_I = current_I | {i} if direction == "forward" else current_I - {i}
-        next_estimate, next_score, _ = _inner_procedure(data, next_I, **params)
+        score_class.set_I(next_I)
+        next_estimate, next_score = _inner_procedure(score_class, next_I, **params)
         if next_score >= current_score:
             current_score, current_estimate, current_I = (next_score, next_estimate, next_I)
         else:
