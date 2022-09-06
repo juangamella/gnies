@@ -204,7 +204,6 @@ def fit_greedy(
             for i in next_Is:
                 new_I = current_I | {i} if phase == "forward" else current_I - {i}
                 score_class.set_I(new_I)
-                # score_class = FixedInterventionalScore(data, new_I, lmbda=lmbda)
                 estimate, score = _inner_procedure(score_class, new_I, **params)
                 print("      Scored I=%s : %0.2f" % (new_I, score)) if debug else None
                 scores.append((score, new_I, estimate))
