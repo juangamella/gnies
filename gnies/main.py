@@ -178,19 +178,17 @@ def fit_greedy(
     print("Running GnIES with greedy phases %s" % phases) if debug else None
     # Inner procedure parameters
     params = {
-        "lmbda": lmbda,
         "phases": ges_phases,
         "iterate": ges_iterate,
-        "centered": True,
-        "covariances": None,
         "debug": 2 if debug > 1 else 0,
     }
 
     # Iteration 0: initial set
-    current_estimate, current_score, current_score_class = _inner_procedure(data, I0, **params)
+    score_class = FixedInterventionalScore(data, I0, lmbda=lmbda)
+    current_estimate, current_score = _inner_procedure(score_class, I0, **params)
 
     # Iterate
-    p = current_score_class.p
+    p = score_class.p
     current_I = I0
     full_I = set(range(p))
     phase = "forward"
@@ -205,14 +203,15 @@ def fit_greedy(
                 break
             for i in next_Is:
                 new_I = current_I | {i} if phase == "forward" else current_I - {i}
-                estimate, score, new_score_class = _inner_procedure(data, new_I, previous_score=current_score_class, **params)
+                score_class.set_I(new_I)
+                estimate, score = _inner_procedure(score_class, new_I, **params)
                 print("      Scored I=%s : %0.2f" % (new_I, score)) if debug else None
-                scores.append((score, new_I, estimate, new_score_class))
+                scores.append((score, new_I, estimate))
             # Pick the maximally scoring addition/removal
-            new_score, new_I, new_estimate, new_score_class = max(scores)
+            new_score, new_I, new_estimate = max(scores)
             # If the score was improved, repeat the greedy step
             if new_score >= current_score:
-                current_score, current_I, current_estimate, current_score_class = new_score, new_I, new_estimate, new_score_class
+                current_score, current_I, current_estimate = new_score, new_I, new_estimate
             # Otherwise, halt
             else:
                 print("    Score was not improved.") if debug else None
@@ -328,7 +327,7 @@ def fit_rank(
 
 
 def _inner_procedure(
-    data,
+    score_class,
     I,
     lmbda=None,
     phases=["forward", "backward", "turning"],
@@ -378,17 +377,8 @@ def _inner_procedure(
     -------
 
     """
-    # Construct score class and completion algorithm
-    score_class = FixedInterventionalScore(data, I, centered=centered, lmbda=lmbda)
-    if previous_score is not None:
-        # start = time.time()
-        change = (I - previous_score.I) | (previous_score.I - I)
-        old_cache = previous_score._cache
-        new_cache = dict((((j,pa),score) for ((j,pa),score) in old_cache.items() if j not in change))
-        score_class._cache = new_cache
-        # print("Used old cache - change = %s - (setup in %0.4f seconds)" % (change, time.time() - start))
-    if covariances is not None:
-        score_class._sample_covariances = covariances
+    # Construct completion algorithm
+    assert score_class.I == I
 
     def completion_algorithm(PDAG):
         return utils.pdag_to_icpdag(PDAG, I)
@@ -396,4 +386,4 @@ def _inner_procedure(
     # Run inner procedure
     estimate, score = ges.fit(score_class, completion_algorithm, phases=phases, iterate=iterate, debug=debug)
 
-    return estimate, score, score_class
+    return estimate, score

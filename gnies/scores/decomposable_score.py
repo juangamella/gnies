@@ -101,3 +101,9 @@ class DecomposableScore():
 
         """
         return 0
+
+    def prune_cache(self, V):
+        """Remove all entries for local scores of variables in V from the
+        cache"""
+        new_cache = dict((((j,pa),s) for ((j,pa),s) in self._cache.items() if j not in V))
+        self._cache = new_cache

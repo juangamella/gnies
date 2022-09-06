@@ -136,6 +136,11 @@ class GnIESScore(DecomposableScore):
             self._sample_means = np.array([np.mean(env, axis=0) for env in self._data])
             self._pooled_means = np.sum(self._sample_means * np.reshape(self.n_obs, (self.e, 1)), axis=0) / self.N
 
+    def set_I(self, new_I):
+        change = (self.I - new_I) | (new_I - self.I)
+        self.prune_cache(change)
+        self.I = new_I.copy()
+
     def full_score(self, A):
         """
         Given a DAG adjacency A, return the l0-penalized log-likelihood of
