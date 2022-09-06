@@ -238,6 +238,7 @@ class GnIESScore(DecomposableScore):
         for j in range(self.p):
             pa = utils.pa(j, A)
             B[:, j], Omegas[:, j] = self._mle_local(j, pa)
+            # <TODO: CONTINUE HERE - should I compute means using embedded B?>
         if self.centered:
             return B, Omegas
         else:
@@ -248,14 +249,9 @@ class GnIESScore(DecomposableScore):
     def _mle_local(self, j, pa):
         pa = sorted(pa)
         b, omegas = self._alternating_mle(j, pa, debug=0)
+        means = None if self.centered else self._noise_means_from_b(j, pa, b)
         b = _embedd(b, self.p, pa)
-        if self.centered:
-            return b, omegas
-        else:
-            raise NotImplementedError("Not implemented")
-            # sub_means = self._sample_means[:, [j] + pa]
-            # nus = _noise_means_from_B(B, sub_I, sub_means, self.n_obs)[:, 0]
-            # return b, nus, omegas
+        return b, omegas, means
 
     def _omegas_from_b(self, j, pa, b):
         """Given the regression coefficients for the jth variable, compute the
@@ -281,19 +277,22 @@ class GnIESScore(DecomposableScore):
             #     # regression coefficients in B.
         return omegas
 
+    def _noise_means_from_b(self, j, pa, b):
+        """Given the regression coefficients for a variable, return the
+        noise-term mean estimates"""
+        if j not in self.I:
+            mean = self._pooled_means[j] - self._pooled_means[pa] @ b
+            means = np.ones(self.e, dtype=float) * mean
+        else:
+            means = self.sample_means[:, j] - self.sample_means[:, pa] @ b
+        return means
+
     def _b_from_omegas(self, j, pa, omegas):
         """Regress j on its parents from the weighted covariance matrix,
         where the covariance matrix from each environment is weighted by
         the number of observation and the noise-term variance of j for
         that environment.
         """
-        # TODO: Can further optimize -> if j is in I, the noise-term
-        # variances (omegas) are the same across environments and thus
-        # the weighted covariance is simply the pooled covariance
-        # (computed in the class init)
-        # if j in self.I:
-        #     weighted_covariance = self._pooled_covariance
-        # else:
         if j not in self.I:
             weighted_covariance = self._pooled_covariance
         else:
@@ -303,6 +302,8 @@ class GnIESScore(DecomposableScore):
         return _regress(j, pa, weighted_covariance)
 
     def _alternating_mle(self, j, pa, debug=0):
+        """Estimate the parameters for variable j, i.e. the parent weights and
+        variances (means) of the noise terms."""
         # If j has no parents, can directly estimate omegas
         if len(pa) == 0:
             b = np.array([])
@@ -359,31 +360,6 @@ def _embedd(b, p, idx):
     vector[idx] = b
     return vector
 
-
-
-
-
-
-
-
-def _noise_means_from_B(B, I, sample_means, n_obs):
-    # TODO
-    e, p = sample_means.shape
-    I_B = (np.eye(p) - B)
-    # This gives the noise term means for each environment (as if all
-    # variables were intervened, on all environments)
-    means = sample_means @ I_B
-    # Compute the noise means for each variable across the
-    # non-intervened environments
-    scaled = sample_means * np.reshape(n_obs, (e, 1))
-    for j in range(p):
-        non_intervened = np.where([j not in i for i in I])[0]
-        if len(non_intervened) > 0:
-            # pooled is a 1xp array, containing the mean for each
-            # variable, pooled across the "non_intervened" environments
-            pooled = scaled[non_intervened].sum(axis=0) / n_obs[non_intervened].sum()
-            means[non_intervened, j] = pooled @ I_B[:, j]
-    return means
 
 def _em_like(e_func, m_func, M_0, E_0, dist, tol=1e-6, assume_convex=False, max_iter=100, objective=None, debug=False):
     """
