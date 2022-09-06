@@ -315,21 +315,26 @@ def _omegas_from_b(j, pa, b, I, sample_covariances, pooled_covariance):
     """Given the regression coefficients for the jth variable, compute the
     variance of its noise terms.
     """
-    # TODO: can further optimize by moving sorted(pa) to the _alternating_mle function
-    pa = sorted(pa)
-    omegas = np.zeros(len(sample_covariances), dtype=float)
     # variable j has not received interventions: its noise-term
     # variance is constant across environments
     if j not in I:
-        omegas[:] = pooled_covariance[j,j] - pooled_covariance[j,pa] @ b
+        omega = pooled_covariance[j,j] - pooled_covariance[j,pa] @ b
+        omegas = np.ones(len(sample_covariances), dtype=float) * omega
     if j in I:
         # TODO: Can vectorize this
         p = len(pooled_covariance)
         I_B = -_embedd(b, p, pa)
         I_B[j] = 1
-        for e,cov in enumerate(sample_covariances):
-            #omegas[e] = cov[j,j] - cov[j,pa] @ b
-            omegas[e] = I_B @ cov @ I_B
+        omegas = I_B @ sample_covariances @ I_B
+        # for e,cov in enumerate(sample_covariances):
+        #     omegas[e] = cov[j,j] - cov[j,pa] @ b
+        #     # Why does the above (commented) not work?  Idea: We're
+        #     # not asking about the variance of the conditional
+        #     # distribution of Xj given its parents in environment e,
+        #     # as this would mean the regression coefficients would be
+        #     # allowed to change within environments. We want to know
+        #     # the variance of the residuals resulting from using the
+        #     # regression coefficients in B.
     return omegas
 
 def _b_from_omegas(j, pa, omegas, sample_covariances, n_obs):
@@ -341,12 +346,30 @@ def _b_from_omegas(j, pa, omegas, sample_covariances, n_obs):
     # TODO: Can further optimize -> if j is in I, the noise-term
     # variances (omegas) are the same across environments and thus the
     # weighted covariance is simply the pooled covariance (computed in the class init)
-    pa = sorted(pa)
     e = len(sample_covariances)
     weights = n_obs / omegas
     weights /= sum(weights)
     weighted_covariance = np.sum(sample_covariances * np.reshape(weights, (e, 1, 1)), axis=0)
     return _regress(j, pa, weighted_covariance)
+
+def _noise_means_from_B(B, I, sample_means, n_obs):
+    # TODO
+    e, p = sample_means.shape
+    I_B = (np.eye(p) - B)
+    # This gives the noise term means for each environment (as if all
+    # variables were intervened, on all environments)
+    means = sample_means @ I_B
+    # Compute the noise means for each variable across the
+    # non-intervened environments
+    scaled = sample_means * np.reshape(n_obs, (e, 1))
+    for j in range(p):
+        non_intervened = np.where([j not in i for i in I])[0]
+        if len(non_intervened) > 0:
+            # pooled is a 1xp array, containing the mean for each
+            # variable, pooled across the "non_intervened" environments
+            pooled = scaled[non_intervened].sum(axis=0) / n_obs[non_intervened].sum()
+            means[non_intervened, j] = pooled @ I_B[:, j]
+    return means
 
 def _em_like(e_func, m_func, M_0, E_0, dist, tol=1e-6, assume_convex=False, max_iter=100, objective=None, debug=False):
     """
@@ -485,132 +508,6 @@ def ddof_local(j, pa, I, e, centered=True):
         the number of free parameters
 
     """
-    I = [I] * e
-    # We have to estimate the variance of the noise term for each
-    # environment in which j receives an intervention, and one for the
-    # rest (if any)
-    no_variances = sum(j in i for i in I) + min(1, sum(j not in i for i in I))
-    # Same goes for the noise term mean
-    no_intercepts = 0 if centered else no_variances
-    # We estimate one weight per parent
-    return len(pa) + no_variances + no_intercepts
-
-
-def _B_from_omegas(omegas, A, sample_covariances, n_obs):
-    """
-    Part of the alternating likelihood maximization procedure. Given
-    fixed noise variances and a DAG adjacency A, return the maximizing
-    connectivity matrix.
-
-    Parameters
-    ----------
-    omegas : np.array
-        the noise variances of each variable
-    A : np.array
-        The adjacency matrix of a DAG, where A[i,j] != 0 => i -> j
-    sample_covariances : list(np.array())
-        the list of sample covariances (see np.cov) of the sample from
-        each environment
-    n_obs : list of ints
-       the number of observations available from each environment
-       (i.e. the sample size)
-
-    Returns
-    -------
-    B : np.array
-        the maximizing connectivity matrix
-
-    """
-    e = len(sample_covariances)
-    p = len(sample_covariances[0])
-    B = np.zeros((p, p))
-    for j in range(p):
-        # Dividing by j's variances seems a bit weird at first, but
-        # note that the regression below is done only for j
-        weights = (n_obs / omegas[:, j])
-        weights /= sum(weights)
-        pooled_covariance = np.sum(sample_covariances * np.reshape(weights, (e, 1, 1)), axis=0)
-        parents = np.where(A[:, j] != 0)[0]
-        coef = _regress(j, parents, pooled_covariance)
-        B[parents, j] = coef
-    return B
-
-
-def _noise_means_from_B(B, I, sample_means, n_obs):
-    e, p = sample_means.shape
-    I_B = (np.eye(p) - B)
-    # This gives the noise term means for each environment (as if all
-    # variables were intervened, on all environments)
-    means = sample_means @ I_B
-    # Compute the noise means for each variable across the
-    # non-intervened environments
-    scaled = sample_means * np.reshape(n_obs, (e, 1))
-    for j in range(p):
-        non_intervened = np.where([j not in i for i in I])[0]
-        if len(non_intervened) > 0:
-            # pooled is a 1xp array, containing the mean for each
-            # variable, pooled across the "non_intervened" environments
-            pooled = scaled[non_intervened].sum(axis=0) / n_obs[non_intervened].sum()
-            means[non_intervened, j] = pooled @ I_B[:, j]
-    return means
-
-
-def _omegas_from_B(B, I, sample_covariances, n_obs):
-    """
-    Part of the alternating likelihood maximization procedure. Given
-    fixed noise variances and a DAG adjacency A, return the maximizing
-    connectivity matrix.
-
-    Parameters
-    ----------
-    omegas : np.array
-        the noise variances of each variable
-    A : np.array
-        The adjacency matrix of a DAG, where A[i,j] != 0 => i -> j
-    sample_covariances : list(np.array())
-        the list of sample covariances (see np.cov) of the sample from
-        each environment
-    n_obs : list of ints
-       the number of observations available from each environment
-       (i.e. the sample size)
-
-    Returns
-    -------
-    B : np.array
-        the maximizing connectivity matrix
-
-    """
-    e = len(sample_covariances)
-    if len(I) != e:
-        raise ValueError(
-            "Wrong number of intervention targets (%d) for %d environments" % (len(I), e))
-    p = len(B)
-    omegas = np.zeros((e, p))
-    # Scale sample covariances wrt. each environment's sample size
-    scaled = sample_covariances * np.reshape(n_obs, (e, 1, 1))
-    for j in range(p):
-        # parents = np.where(B[:, j] != 0)[0]
-        # Separate into environments where j is intervened/not
-        intervened = np.where([j in i for i in I])[0]
-        non_intervened = np.where([j not in i for i in I])[0]
-        # Compute variance for environments where variable was not
-        # intervened (variance is fixed across them)
-        if len(non_intervened) > 0:
-            pooled = scaled[non_intervened].sum(axis=0) / sum(n_obs[non_intervened])
-            # variance = pooled[j,j] - pooled[j,parents] @ B[parents,j]
-            variance = ((np.eye(p) - B).T @ pooled @ (np.eye(p) - B))[j, j]
-            omegas[non_intervened, j] = variance
-        # Compute variance for other environments
-        for k in intervened:
-            # TODO: Fix this computational waste (computing a matrix product to extract one element)
-            variance = ((np.eye(p) - B).T @ sample_covariances[k] @ (np.eye(p) - B))[j, j]
-            # variance = sample_covariances[k,j,j] - sample_covariances[k,j,parents] @ B[parents,j]
-            # Why does the above (commented) not work?  Idea: We're
-            # not asking about the variance of the conditional
-            # distribution of Xj given its parents in environment e,
-            # as this would mean the regression coefficients would be
-            # allowed to change within environments. We want to know
-            # the variance of the residuals resulting from using the
-            # regression coefficients in B.
-            omegas[k, j] = variance
-    return omegas  # abs(omegas)
+    n_variances = e if j in I else 1
+    n_intercepts = 0 if centered else n_variances
+    return len(pa) + n_variances + n_intercepts
