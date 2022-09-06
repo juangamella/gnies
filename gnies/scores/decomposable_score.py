@@ -32,13 +32,6 @@
 classes which implement a locally decomposable score for directed
 acyclic graphs. By default, the class also caches the results of
 computing local scores.
-
-NOTE: It is not mandatory to inherit this class when developing custom
-scores to use with the GES implementation in the ges package. The only
-requirement is that the class defines:
-  1. the local_score function (see below),
-  2. an attribute "p" for the total number of variables.
-
 """
 
 import copy

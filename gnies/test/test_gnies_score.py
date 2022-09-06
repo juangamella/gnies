@@ -41,7 +41,7 @@ import os
 
 import gnies.scores.interventional as interventional
 from gnies.scores import InterventionalScore
-from gnies.scores import FixedInterventionalScore
+from gnies.scores.gnies_score import GnIESScore as FixedInterventionalScore
 
 # ---------------------------------------------------------------------
 # Tests for the l0-penalized scores
@@ -824,9 +824,17 @@ class ImplementationChangeTests(unittest.TestCase):
                 print('Saved local_scores to "%s"' % self.local_scores_file)
 
     def test_scores(self):
-        computed_full_scores, computed_local_scores = score_graphs(self.graphs_file, self.targets_file, self.datasets_file)
+        debug = True
+        computed_full_scores, computed_local_scores, mask = score_graphs(self.graphs_file, self.targets_file, self.datasets_file)
         full_scores = np.load(self.full_scores_file)
         local_scores = np.load(self.local_scores_file)
+        diff_full = (computed_full_scores - full_scores)
+        print("Diff. in full scores - min :", diff_full.min(), "max :", diff_full.max())
+        print(diff_full)
+        diff_local = (computed_local_scores - local_scores)
+        print("Diff. in local scores - min :", diff_local.min(), "max :", diff_local.max())
+        print(diff_local)
+        print(diff_local[mask])
         self.assertTrue((computed_full_scores == full_scores).all())
         self.assertTrue((computed_local_scores == local_scores).all())
 
@@ -840,6 +848,7 @@ def score_graphs(graphs_file, targets_file, datasets_file, debug=True):
     p = graphs.shape[1]
     full_scores = np.zeros((len(graphs), len(targets), len(datasets)), dtype=float)
     local_scores = np.zeros((len(graphs), len(targets), len(datasets), p), dtype=float)
+    mask = np.zeros((len(graphs), len(targets), len(datasets), p), dtype=bool)
     # Compute scores
     start = time.time()
     for k, data in enumerate(datasets):
@@ -848,13 +857,19 @@ def score_graphs(graphs_file, targets_file, datasets_file, debug=True):
             score = FixedInterventionalScore(data, I)
             for i, A in enumerate(graphs):
                 print("  Graph", i+1) if debug else None
-                full_scores[i, j, k] = score.full_score(A)
-                print("   full score :", full_scores[i, j, k]) if debug else None
+                full_score = score.full_score(A)
+                full_scores[i, j, k] = full_score
+                print("   full score :", full_score) if debug else None
                 print("   local scores :") if debug else None
+                sum_of_locals = 0
                 for h in range(p):
                     pa = utils.pa(h, A)
-                    local_scores[i, j, k, h] = score.local_score(h, pa)
-                    print("    %d : " % h, local_scores[i, j, k, h]) if debug else None
+                    local_score = score.local_score(h, pa)
+                    sum_of_locals += local_score
+                    local_scores[i, j, k, h] = local_score
+                    mask[i, j, k, h] = (h not in I) or (len(pa) == 0)
+                    print("    %d : " % h, local_score) if debug else None
+                print("full :", full_score, "sum :", sum_of_locals) if debug else None
                 print() if debug else None
     print("Scored graphs in %0.2f seconds" % (time.time() - start))
-    return full_scores, local_scores
+    return full_scores, local_scores, mask

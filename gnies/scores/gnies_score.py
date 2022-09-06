@@ -40,6 +40,7 @@ import numpy as np
 from . import log_likelihood
 from . import log_likelihood_means
 from .decomposable_score import DecomposableScore
+import gnies.utils as utils
 
 # --------------------------------------------------------------------
 # Interventional Score Class (see FixedInterventionalScore below for GnIES score)
@@ -128,12 +129,12 @@ class GnIESScore(DecomposableScore):
 
         # Precompute scatter matrices
         self._sample_covariances = np.array([np.cov(env, rowvar=False, ddof=0) for env in data])
-        self._pooled_covariance =  np.sum(sample_covariances * np.reshape(n_obs, (e, 1, 1)), axis=0) / self.N
+        self._pooled_covariance =  np.sum(self._sample_covariances * np.reshape(self.n_obs, (self.e, 1, 1)), axis=0) / self.N
 
         # Precompute sample means
         if not centered:
-            self._sample_means = np.array([np.mean(env, axis=0) for env in data])
-            self._pooled_means = np.sum(sample_means * np.reshape(n_obs, (e, 1)), axis=0) / self.N
+            self._sample_means = np.array([np.mean(env, axis=0) for env in self._data])
+            self._pooled_means = np.sum(self._sample_means * np.reshape(self.n_obs, (self.e, 1)), axis=0) / self.N
 
     def full_score(self, A):
         """
@@ -163,44 +164,12 @@ class GnIESScore(DecomposableScore):
         #   Note: the number of parameters is the number of edges +
         #   the total number of marginal variances/means, which depends on
         #   the number of interventions.
-        l0_term = self.lmbda * ddof_full(A, self.I, centered=self.centered)
+        l0_term = self.lmbda * ddof_full(A, self.I, self.e, centered=self.centered)
         score = likelihood - l0_term
         return score
 
-    def local_score(self, x, pa, I):
-        """Return the local score of a given node and a set of
-        parents. If self.cache=True, will use previously computed
-        score if possible.
-
-        Parameters
-        ----------
-        x : int
-            a node
-        pa : set of ints
-            the node's parents
-        I : list of sets
-            the sets of variables which have received interventions in
-            each environment
-
-        Returns
-        -------
-        score : float
-            the corresponding score
-
-        """
-        return self._compute_local_score(x, pa, self.I)
-        # if self._cache is None:
-        #     return self._compute_local_score(x, pa, I)
-        # else:
-        #     key = (x, tuple(sorted(pa)))
-        #     try:
-        #         score = self._cache[key]
-        #         print("score%s: using cached value %0.2f" % (key,score)) if self._debug>=2 else None
-        #     except KeyError:
-        #         score = self._compute_local_score(x, pa, I)
-        #         self._cache[key] = score
-        #         print("score%s = %0.2f" % (key,score)) if self._debug>=2 else None
-        #     return score
+    # def local_score(self, x, pa, I):
+    #   already defined in parent class DecomposableScore, which calls _compute_local_score
 
     def _compute_local_score(self, x, pa):
         """
@@ -233,14 +202,14 @@ class GnIESScore(DecomposableScore):
             likelihood = log_likelihood_means.local(x, b, nus, omegas, self._data)
         #  Note: the number of parameters is the number of parents (one
         #  weight for each) + one marginal variance/mean per environment for x
-        l0_term = self.lmbda * ddof_local(x, pa, self.I, centered=self.centered)
+        l0_term = self.lmbda * ddof_local(x, pa, self.I, self.e, centered=self.centered)
         score = likelihood - l0_term
         return score
 
     # --------------------------------------------------------------------
     #  Functions for the maximum likelihood estimation of the
     #  weights/variances
-    def _mle_full(self, A, I):
+    def _mle_full(self, A):
         """Given the DAG adjacency A and observations, compute the maximum
         likelihood estimate of the connectivity weights and noise
         variances, returning them and the resulting log likelihood.
@@ -262,29 +231,30 @@ class GnIESScore(DecomposableScore):
         Omegas = np.zeros((self.e, self.p), dtype=float)
         for j in range(self.p):
             pa = utils.pa(j, A)
-            B[:, j], Omegas[:,j] = self._mle_local(j, pa)
-            <TODO: CONTINUE HERE>x
+            B[:, j], Omegas[:, j] = self._mle_local(j, pa)
         if self.centered:
             return B, Omegas
         else:
-            noise_term_means = _noise_means_from_B(B, I, self._sample_means, self.n_obs)
-            return B, noise_term_means, omegas
+            # noise_term_means = _noise_means_from_B(B, I, self._sample_means, self.n_obs)
+            # return B, noise_term_means, omegas
+            raise NotImplementedError("Not implemented")
 
     def _mle_local(self, j, pa):
         pa = sorted(pa)
-        b, omegas = _alternating_mle(j, pa, self.I, self._sample_covariances, self._pooled_covariance, self.n_obs, self.tol=1e-16, self.max_iter=50, debug=0)
+        b, omegas = _alternating_mle(j, pa, self.I, self._sample_covariances, self._pooled_covariance, self.n_obs, self.tol, self.max_iter, debug=0)
         b = _embedd(b, self.p, pa)
         if self.centered:
             return b, omegas
         else:
             raise NotImplementedError("Not implemented")
-            sub_means = self._sample_means[:, [j] + pa]
-            nus = _noise_means_from_B(B, sub_I, sub_means, self.n_obs)[:, 0]
-            return b, nus, omegas
-        
+            # sub_means = self._sample_means[:, [j] + pa]
+            # nus = _noise_means_from_B(B, sub_I, sub_means, self.n_obs)[:, 0]
+            # return b, nus, omegas
+
 # --------------------------------------------------------------------
 # Functions for the alternating maximization procedure used to find
 # the MLE
+
 
 def _regress(j, pa, cov):
     """Compute the regression coefficients from the covariance matrix i.e.
@@ -292,45 +262,52 @@ def _regress(j, pa, cov):
     """
     return np.linalg.solve(cov[pa, :][:, pa], cov[j, pa])
 
-def _embedd(b,p,idx):
+
+def _embedd(b, p, idx):
     """Create a new vector with elements in idx corresponding to the
     elements in b and zeros elsewhere."""
     vector = np.zeros(p, dtype=b.dtype)
     vector[idx] = b
     return vector
-    
 
-def _alternating_mle(j, pa, I, sample_covariances, pooled_covariance, n_obs, tol=1e-16, max_iter=50, debug=0):
-    # Set starting point for optimization procedure
-    b0 = _regress(j, pa, pooled_covariance)
-    omegas_0 = _omegas_from_b(j, pa, b_0, I, sample_covariances, pooled_covariance)    
 
-    # Define components for the alternating (EM-like) optimization procedure
-    # "Expectation" function: given b compute the noise-term variances
-    def e_func(b):
-        return _omegas_from_b(j, pa, b, I, sample_covariances, pooled_covariance)    
-
-    # "Maximization" function: given variances of noise terms, compute B
-    def m_func(omegas):
-        return _b_from_omegas(j, pa, omegas, sample_covariances, n_obs)
-
-    # Distance to check for convergence: max of L1 distance between
-    # successive b's and successive omegas
-    def dist(prev_b, prev_omegas, b, omegas):
-        return max(abs(b - prev_b).max(), abs(omegas - prev_omegas).max())
-
-    # Keep track of the objective function if debugging is desired
-    if debug:
-        def objective(B, omegas):
-            return log_likelihood.local(j, b, omegas, sample_covariances, n_obs)
+def _alternating_mle(j, pa, I, sample_covariances, pooled_covariance, n_obs, tol, max_iter, debug=0):
+    # If j has no parents, can directly estimate omegas
+    if len(pa) == 0:
+        b = np.array([])
+        omegas = _omegas_from_b(j, pa, b, I, sample_covariances, pooled_covariance)
+        return b, omegas
     else:
-        objective = None
+        # Set starting point for optimization procedure
+        b_0 = _regress(j, pa, pooled_covariance)
+        omegas_0 = _omegas_from_b(j, pa, b_0, I, sample_covariances, pooled_covariance)
 
-    # Run procedure
-    print("    Running alternating optimization procedure") if debug else None
-    (B, omegas) = _em_like(e_func, m_func, B_0, omegas_0, dist,
-                           tol=tol, max_iter=max_iter, objective=objective, debug=debug)
-    return B, omegas
+        # Components for the alternating (EM-like) optimization procedure
+        # "Expectation" function: given b compute the noise-term variances
+        def e_func(b):
+            return _omegas_from_b(j, pa, b, I, sample_covariances, pooled_covariance)
+
+        # "Maximization" function: given variances of noise terms, compute B
+        def m_func(omegas):
+            return _b_from_omegas(j, pa, omegas, sample_covariances, n_obs)
+
+        # Distance to check for convergence: max of L1 distance between
+        # successive b's and successive omegas
+        def dist(prev_b, prev_omegas, b, omegas):
+            return max(abs(b - prev_b).max(), abs(omegas - prev_omegas).max())
+
+        # Keep track of the objective function if debugging is desired
+        if debug:
+            def objective(B, omegas):
+                return log_likelihood.local(j, b, omegas, sample_covariances, n_obs)
+        else:
+            objective = None
+
+        # Run procedure
+        print("    Running alternating optimization procedure") if debug else None
+        (b, omegas) = _em_like(e_func, m_func, b_0, omegas_0, dist,
+                               tol=tol, max_iter=max_iter, objective=objective, debug=debug)
+        return b, omegas
 
 
 
@@ -347,8 +324,12 @@ def _omegas_from_b(j, pa, b, I, sample_covariances, pooled_covariance):
         omegas[:] = pooled_covariance[j,j] - pooled_covariance[j,pa] @ b
     if j in I:
         # TODO: Can vectorize this
+        p = len(pooled_covariance)
+        I_B = -_embedd(b, p, pa)
+        I_B[j] = 1
         for e,cov in enumerate(sample_covariances):
-            omegas[e] = cov[j,j] - cov[j,pa] @ b
+            #omegas[e] = cov[j,j] - cov[j,pa] @ b
+            omegas[e] = I_B @ cov @ I_B
     return omegas
 
 def _b_from_omegas(j, pa, omegas, sample_covariances, n_obs):
@@ -361,6 +342,7 @@ def _b_from_omegas(j, pa, omegas, sample_covariances, n_obs):
     # variances (omegas) are the same across environments and thus the
     # weighted covariance is simply the pooled covariance (computed in the class init)
     pa = sorted(pa)
+    e = len(sample_covariances)
     weights = n_obs / omegas
     weights /= sum(weights)
     weighted_covariance = np.sum(sample_covariances * np.reshape(weights, (e, 1, 1)), axis=0)
@@ -444,7 +426,7 @@ def _em_like(e_func, m_func, M_0, E_0, dist, tol=1e-6, assume_convex=False, max_
     return M, E
 
 
-def ddof_full(A, I, centered=True):
+def ddof_full(A, I, e, centered=True):
     """Compute the number of free parameters in a model specified by the
     DAG adjacency and the intervention targets.
 
@@ -466,6 +448,7 @@ def ddof_full(A, I, centered=True):
 
 
     """
+    I = [I] * e
     p = len(A)
     # We estimate a weight for each edge
     no_edges = (A != 0).sum()
@@ -478,7 +461,7 @@ def ddof_full(A, I, centered=True):
     return no_edges + no_variances + no_intercepts
 
 
-def ddof_local(j, pa, I, centered=True):
+def ddof_local(j, pa, I, e, centered=True):
     """Compute the number of free parameters that are estimated for a
     variable in the model, given its parents and the intervention
     targets.
@@ -502,6 +485,7 @@ def ddof_local(j, pa, I, centered=True):
         the number of free parameters
 
     """
+    I = [I] * e
     # We have to estimate the variance of the noise term for each
     # environment in which j receives an intervention, and one for the
     # rest (if any)
