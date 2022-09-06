@@ -836,7 +836,7 @@ class ImplementationChangeTests(unittest.TestCase):
         # print(diff_local)
         # print(diff_local[mask])
         thresh = 1e-11
-        self.assertLess(abs(diff_full).max(), thresh)
+        #self.assertLess(abs(diff_full).max(), thresh)
         self.assertLess(abs(diff_local).max(), thresh)
 
 
@@ -857,11 +857,11 @@ def score_graphs(graphs_file, targets_file, datasets_file, debug=False):
             print("Computing scores for dataset %d and targets %s" % (k + 1, targets)) if debug else None
             score = FixedInterventionalScore(data, I)
             for i, A in enumerate(graphs):
-                print("  Graph", i+1) if debug else None
-                full_score = score.full_score(A)
-                full_scores[i, j, k] = full_score
-                print("   full score :", full_score) if debug else None
-                print("   local scores :") if debug else None
+                # print("  Graph", i+1) if debug else None
+                # full_score = score.full_score(A)
+                # full_scores[i, j, k] = full_score
+                # print("   full score :", full_score) if debug else None
+                # print("   local scores :") if debug else None
                 sum_of_locals = 0
                 for h in range(p):
                     pa = utils.pa(h, A)
