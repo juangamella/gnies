@@ -160,20 +160,17 @@ class GnIESScore(DecomposableScore):
 
         """
         # Compute MLE and its likelihood
+        B, omegas, means = self._mle_full(A)
         if self.centered:
-            B, omegas = self._mle_full(A)
             likelihood = log_likelihood.full(B, omegas, self._sample_covariances, self.n_obs)
         else:
-            B, nus, omegas = self._mle_full(A)
-            likelihood = log_likelihood_means.full(B, nus, omegas, self._data)
-        #   Note: the number of parameters is the number of edges +
-        #   the total number of marginal variances/means, which depends on
-        #   the number of interventions.
+            likelihood = log_likelihood_means.full(B, means, omegas, self._data)
+        # Penalization term
         l0_term = self.lmbda * ddof_full(A, self.I, self.e, centered=self.centered)
         score = likelihood - l0_term
         return score
 
-    # def local_score(self, x, pa, I):
+    # def local_score(self, x, pa):
     #   already defined in parent class DecomposableScore, which calls _compute_local_score
 
     def _compute_local_score(self, j, pa):
@@ -196,18 +193,13 @@ class GnIESScore(DecomposableScore):
             the penalized log-likelihood score
 
         """
-        # Compute MLE, with the local subgraph p -> x for p in pa
-        #   Only do set -> list conversion once, as the ordering is not
-        #   guaranteed to be consistent.
-        ddof = self.e if j in self.I else 1
+        b, omegas, means = self._mle_local(j, pa)
+        # Compute likelihood
         if self.centered:
-            b, omegas = self._mle_local(j, pa)
             likelihood = -0.5 * ((1 + np.log(omegas)) * self.n_obs).sum()
         else:
-            b, nus, omegas = self._mle_local(j, pa)
-            likelihood = log_likelihood_means.local(j, b, nus, omegas, self._data)
-        #  Note: the number of parameters is the number of parents (one
-        #  weight for each) + one marginal variance/mean per environment for x
+            likelihood = log_likelihood_means.local(j, b, means, omegas, self._data)
+        # Penalization term
         l0_term = self.lmbda * ddof_local(j, pa, self.I, self.e, centered=self.centered)
         score = likelihood - l0_term
         return score
@@ -235,16 +227,14 @@ class GnIESScore(DecomposableScore):
         """
         B = np.zeros((self.p, self.p), dtype=float)
         Omegas = np.zeros((self.e, self.p), dtype=float)
+        Means = []
         for j in range(self.p):
             pa = utils.pa(j, A)
-            B[:, j], Omegas[:, j] = self._mle_local(j, pa)
-            # <TODO: CONTINUE HERE - should I compute means using embedded B?>
-        if self.centered:
-            return B, Omegas
-        else:
-            # noise_term_means = _noise_means_from_B(B, I, self._sample_means, self.n_obs)
-            # return B, noise_term_means, omegas
-            raise NotImplementedError("Not implemented")
+            b, omegas, means = self._mle_local(j, pa)
+            B[:, j], Omegas[:, j] = b, omegas
+            Means.append(means)
+        Means = None if self.centered else np.array(Means).T
+        return B, Omegas, Means
 
     def _mle_local(self, j, pa):
         pa = sorted(pa)
