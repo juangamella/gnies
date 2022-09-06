@@ -471,17 +471,12 @@ def ddof_full(A, I, e, centered=True):
 
 
     """
-    I = [I] * e
     p = len(A)
     # We estimate a weight for each edge
-    no_edges = (A != 0).sum()
-    # For each variable, we have to estimate its noise term variance
-    # for each environment in which it receives an intervention, and
-    # one for the rest (if any)
-    no_variances = sum(len(i) for i in I) + p - len(set.intersection(*I))
-    # Same goes for the noise term mean
-    no_intercepts = 0 if centered else no_variances
-    return no_edges + no_variances + no_intercepts
+    n_edges = (A != 0).sum()
+    n_variances = len(I) * e + (p - len(I))
+    n_intercepts = 0 if centered else n_variances
+    return n_edges + n_variances + n_intercepts
 
 
 def ddof_local(j, pa, I, e, centered=True):
