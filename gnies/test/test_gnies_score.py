@@ -225,16 +225,16 @@ class ScoreTests(unittest.TestCase):
     factorization = [(4, (2, 3)), (3, (2,)), (2, (0, 1)), (0, ()), (1, ())]
     rng = np.random.default_rng(42)
     true_B = true_A * rng.uniform(1, 2, size=true_A.shape)
-    scm = sempler.LGANM(true_B, (0, 0), (0.3, 0.4))
+    scm = sempler.LGANM(true_B, (0, 0), (0.3, 0.4), random_state=42)
     p = len(true_A)
-    n = np.random.randint(100, 10000)
+    n = 100000
     true_targets = [set(), {0}, {1}, {2}, {3}, {4}]
     interventions = [{0: (1.1, 1.0)},
                      {1: (2.2, 1.1)},
                      {2: (3.3, 1.2)},
                      {3: (4.4, 1.3)},
                      {4: (5.5, 1.4)}]
-    obs_data = scm.sample(n=n)
+    obs_data = scm.sample(n=n, random_state=42)
     int_data = [obs_data]
     n_obs = [n] * (len(interventions) + 1)
     e = len(interventions) + 1
@@ -243,7 +243,7 @@ class ScoreTests(unittest.TestCase):
     interventional_variances = np.tile(scm.variances, (len(interventions) + 1, 1))
     interventional_means = np.tile(scm.means, (len(interventions) + 1, 1))
     for i, intervention in enumerate(interventions):
-        int_data.append(scm.sample(n=n, shift_interventions=intervention))
+        int_data.append(scm.sample(n=n, shift_interventions=intervention, random_state=42))
         for (target, params) in intervention.items():
             interventional_variances[i + 1, target] += params[1]
             interventional_means[i + 1, target] += params[0]
@@ -386,317 +386,247 @@ class ScoreTests(unittest.TestCase):
         self.assertTrue(np.allclose(self.true_B, B_full, atol=5e-2))
         self.assertTrue(np.allclose(self.true_B, B_local, atol=5e-2))
 
-#     def test_mle_2_centered(self):
-#         # Check that MLE works properly and respects restriction on
-#         # noise term variances imposed by I
+    def test_mle_2_centered(self):
+        # Check that MLE works properly and respects restriction on
+        # noise term variances imposed by I
 
-#         # ----------------------------------------
-#         # Setup
-#         G = NUM_GRAPHS
-#         k = 2.1
-#         K = 5
-#         # Generate random graphs
-#         graphs = [self.true_A]
-#         graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
-#         # Generate random intervention targets
-#         interventions = [self.true_targets]
-#         for _ in range(K):
-#             random_interventions = sempler.generators.intervention_targets(self.p,
-#                                                                            self.e,
-#                                                                            (0, self.p), random_state=42)
-#             interventions.append([set(I) for I in random_interventions])
+        # ----------------------------------------
+        # Setup
+        G = NUM_GRAPHS
+        k = 2.1
+        K = 5
+        # Generate random graphs
+        graphs = [self.true_A]
+        graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
+        # Generate random intervention targets
+        interventions = [self.true_targets]
+        for _ in range(K):
+            random_interventions = sempler.generators.intervention_targets(self.p,
+                                                                           self.e,
+                                                                           (0, self.p), random_state=42)
+            interventions.append(set.union(*[set(I) for I in random_interventions]))
 
-#         # ----------------------------------------
-#         # Test behaviour of MLE
-#         start = time.time()
-#         score = InterventionalScore(self.int_data, lmbda=None)
-#         for A in graphs:
-#             for I in interventions:
-#                 # print("\n\nInterventions set: ", I)
-#                 # Full MLE
-#                 B_full, omegas_full = score._mle_full(A, I)
-#                 # print("FULL")
-#                 # print(B_full)
-#                 # print(omegas_full)
-#                 # Local MLE
-#                 B_local, omegas_local = np.zeros_like(B_full), np.zeros_like(omegas_full)
-#                 for j in range(self.p):
-#                     pa = np.where(A[:, j] != 0)[0]
-#                     B_local[:, j], omegas_local[:, j] = score._mle_local(j, pa, I)
-#                 # print("LOCAL")
-#                 # print(B_local)
-#                 # print(omegas_local)
-#                 # Test that result is the same when parameters are
-#                 # estimated locally or using the full graph
-#                 self.assertTrue(np.allclose(B_full, B_local))
-#                 self.assertTrue(np.allclose(omegas_full, omegas_local))
-#                 # Test that the constrainst imposed by the intervention
-#                 # targets hold
-#                 for j in range(self.p):
-#                     not_intervened_in = np.where([j not in targets for targets in I])[0]
-#                     # Check that variances in environments where j is not intervened remain constant
-#                     if len(not_intervened_in) > 0:
-#                         self.assertEqual(1, len(np.unique(omegas_local[not_intervened_in, j])))
-#                         self.assertEqual(1, len(np.unique(omegas_full[not_intervened_in, j])))
-#                     # Check DDOF
-#                     self.assertEqual(gnies_score.ddof_local(j, set(), I),
-#                                      len(np.unique(omegas_local[:, j])))
-#                     self.assertEqual(gnies_score.ddof_local(j, set(), I),
-#                                      len(np.unique(omegas_full[:, j])))
-#         print("Tested MLE behaviour (centered) for %d cases (%d graphs x %d intervention sets) (%0.2f s)" %
-#               ((G + 1) * (K + 1), G + 1, K + 1, time.time() - start))
+        # ----------------------------------------
+        # Test behaviour of MLE
+        start = time.time()
+        for I in interventions:
+            score = GnIESScore(self.int_data, I, lmbda=None)
+            for A in graphs:
+                # print("\n\nInterventions set: ", I)
+                # Full MLE
+                B_full, omegas_full, means = score._mle_full(A)
+                self.assertIsNone(means)
+                # print("FULL")
+                # print(B_full)
+                # print(omegas_full)
+                # Local MLE
+                B_local, omegas_local = np.zeros_like(B_full), np.zeros_like(omegas_full)
+                for j in range(self.p):
+                    pa = np.where(A[:, j] != 0)[0]
+                    B_local[:, j], omegas_local[:, j], means = score._mle_local(j, pa)
+                    self.assertIsNone(means)
+                # print("LOCAL")
+                # print(B_local)
+                # print(omegas_local)
+                # Test that result is the same when parameters are
+                # estimated locally or using the full graph
+                self.assertTrue((B_full == B_local).all())
+                self.assertTrue((omegas_full == omegas_local).all())
+                # Test that the constrainst imposed by the intervention
+                # targets hold
+                for j in range(self.p):
+                    if j not in I:
+                        self.assertEqual(1, len(np.unique(omegas_local[:,j])))
+                        self.assertEqual(1, len(np.unique(omegas_full[:,j])))
+                    else:
+                        self.assertEqual(self.e, len(np.unique(omegas_local[:,j])))
+                        self.assertEqual(self.e, len(np.unique(omegas_full[:,j])))
+                    # Check DDOF
+                    self.assertEqual(gnies_score.ddof_local(j, set(), I, self.e),
+                                     len(np.unique(omegas_local[:, j])))
+                    self.assertEqual(gnies_score.ddof_local(j, set(), I, self.e),
+                                     len(np.unique(omegas_full[:, j])))
+        print("Tested MLE behaviour (centered) for %d cases (%d graphs x %d intervention sets) (%0.2f s)" %
+              ((G + 1) * (K + 1), G + 1, K + 1, time.time() - start))
 
-#     def test_mle_2_uncentered(self):
-#         # Check that MLE works properly and respects restriction on
-#         # noise term means/variances imposed by I
+    def test_mle_2_uncentered(self):
+        # Check that MLE works properly and respects restriction on
+        # noise term variances imposed by I
 
-#         # ----------------------------------------
-#         # Setup
-#         G = NUM_GRAPHS
-#         k = 2.1
-#         K = 5
-#         # Generate random graphs
-#         graphs = [self.true_A]
-#         graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
-#         # Generate random intervention targets
-#         interventions = [self.true_targets]
-#         for _ in range(K):
-#             random_interventions = sempler.generators.intervention_targets(self.p,
-#                                                                            self.e,
-#                                                                            (1, self.p), random_state=42)
-#             interventions.append([set(I) for I in random_interventions])
+        # ----------------------------------------
+        # Setup
+        G = NUM_GRAPHS
+        k = 2.1
+        K = 5
+        # Generate random graphs
+        graphs = [self.true_A]
+        graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
+        # Generate random intervention targets
+        interventions = [self.true_targets]
+        for _ in range(K):
+            random_interventions = sempler.generators.intervention_targets(self.p,
+                                                                           self.e,
+                                                                           (0, self.p), random_state=42)
+            interventions.append(set.union(*[set(I) for I in random_interventions]))
 
-#         # ----------------------------------------
-#         # Test behaviour of MLE
-#         start = time.time()
-#         score = InterventionalScore(self.int_data, lmbda=None, centered=False)
-#         for A in graphs:
-#             for I in interventions:
-#                 # print("\n\nInterventions set: ", I)
-#                 # Full MLE
-#                 B_full, nus_full, omegas_full = score._mle_full(A, I)
-#                 # print("FULL")
-#                 # print(B_full)
-#                 # print(nus_full)
-#                 # print(omegas_full)
-#                 # Local MLE
-#                 B_local = np.zeros_like(B_full)
-#                 nus_local = np.zeros((self.e, self.p))
-#                 omegas_local = np.zeros_like(omegas_full)
-#                 for j in range(self.p):
-#                     pa = np.where(A[:, j] != 0)[0]
-#                     B_local[:, j], nus_local[:, j], omegas_local[:, j] = score._mle_local(j, pa, I)
-#                 # print("LOCAL")
-#                 # print(B_local)
-#                 # print(nus_local)
-#                 # print(omegas_local)
-#                 # Test that result is the same when parameters are
-#                 # estimated locally or using the full graph
-#                 self.assertTrue(np.allclose(B_full, B_local))
-#                 self.assertTrue(np.allclose(omegas_full, omegas_local))
-#                 self.assertTrue(np.allclose(nus_full, nus_local))
-#                 # Test that the constrainst imposed by the intervention
-#                 # targets hold
-#                 for j in range(self.p):
-#                     not_intervened_in = np.where([j not in targets for targets in I])[0]
-#                     # Check that variances in environments where j is not intervened remain constant
-#                     if len(not_intervened_in) > 0:
-#                         self.assertEqual(1, len(np.unique(omegas_local[not_intervened_in, j])))
-#                         self.assertEqual(1, len(np.unique(omegas_full[not_intervened_in, j])))
-#                         self.assertEqual(1, len(np.unique(nus_local[not_intervened_in, j])))
-#                         self.assertEqual(1, len(np.unique(nus_full[not_intervened_in, j])))
-#                     # Check DDOF
-#                     self.assertEqual(gnies_score.ddof_local(j, set(), I),
-#                                      len(np.unique(omegas_local[:, j])))
-#                     self.assertEqual(gnies_score.ddof_local(j, set(), I),
-#                                      len(np.unique(omegas_full[:, j])))
-#                     self.assertEqual(gnies_score.ddof_local(j, set(), I),
-#                                      len(np.unique(nus_local[:, j])))
-#                     self.assertEqual(gnies_score.ddof_local(j, set(), I),
-#                                      len(np.unique(nus_full[:, j])))
-#         print("Tested MLE behaviour (uncentered) for %d cases (%d graphs x %d intervention sets) (%0.2f s)" %
-#               ((G + 1) * (K + 1), G + 1, K + 1, time.time() - start))
+        # ----------------------------------------
+        # Test behaviour of MLE
+        start = time.time()
+        for I in interventions:
+            score = GnIESScore(self.int_data, I, centered=False, lmbda=None)
+            for A in graphs:
+                # print("\n\nInterventions set: ", I)
+                # Full MLE
+                B_full, omegas_full, means_full = score._mle_full(A)
+                # print("FULL")
+                # print(B_full)
+                # print(omegas_full)
+                # Local MLE
+                B_local, omegas_local, means_local = np.zeros_like(B_full), np.zeros_like(omegas_full), np.zeros_like(means_full)
+                for j in range(self.p):
+                    pa = np.where(A[:, j] != 0)[0]
+                    B_local[:, j], omegas_local[:, j], means_local[:,j] = score._mle_local(j, pa)
+                # print("LOCAL")
+                # print(B_local)
+                # print(omegas_local)
+                # Test that result is the same when parameters are
+                # estimated locally or using the full graph
+                self.assertTrue((B_full == B_local).all())
+                self.assertTrue((omegas_full == omegas_local).all())
+                self.assertTrue((means_full == means_local).all())
+                # Test that the constrainst imposed by the intervention
+                # targets hold
+                for j in range(self.p):
+                    if j not in I:
+                        self.assertEqual(1, len(np.unique(omegas_local[:,j])))
+                        self.assertEqual(1, len(np.unique(omegas_full[:,j])))
+                        self.assertEqual(1, len(np.unique(means_local[:,j])))
+                        self.assertEqual(1, len(np.unique(means_full[:,j])))
+                    else:
+                        self.assertEqual(self.e, len(np.unique(omegas_local[:,j])))
+                        self.assertEqual(self.e, len(np.unique(omegas_full[:,j])))
+                        self.assertEqual(self.e, len(np.unique(means_local[:,j])))
+                        self.assertEqual(self.e, len(np.unique(means_full[:,j])))
+                    # Check DDOF
+                    self.assertEqual(gnies_score.ddof_local(j, set(), I, self.e),
+                                     len(np.unique(omegas_local[:, j])))
+                    self.assertEqual(gnies_score.ddof_local(j, set(), I, self.e),
+                                     len(np.unique(omegas_full[:, j])))
+                    self.assertEqual(gnies_score.ddof_local(j, set(), I, self.e),
+                                     len(np.unique(means_local[:, j])))
+                    self.assertEqual(gnies_score.ddof_local(j, set(), I, self.e),
+                                     len(np.unique(means_full[:, j])))
+                    self.assertEqual(gnies_score.ddof_local(j, set(), I, self.e, centered=False),
+                                     len(np.unique(means_local[:, j])) + len(np.unique(omegas_local[:, j])))
+                    self.assertEqual(gnies_score.ddof_local(j, set(), I, self.e, centered=False),
+                                     len(np.unique(means_full[:, j])) + len(np.unique(means_full[:, j])))
+        print("Tested MLE behaviour (centered) for %d cases (%d graphs x %d intervention sets) (%0.2f s)" %
+              ((G + 1) * (K + 1), G + 1, K + 1, time.time() - start))
 
-#     def test_coarse_equals_fine(self):
-#         # Calling the coarse score with I should yield the same result
-#         # as calling the fine_grained score with [I] * self.e
-#         # ----------------------------------------
-#         # Setup
-#         G = NUM_GRAPHS
-#         k = 2.1
-#         K = 5
-#         # Generate random graphs
-#         graphs = [self.true_A]
-#         graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
-#         # Generate random intervention targets
-#         random_interventions = sempler.generators.intervention_targets(self.p,
-#                                                                        K,
-#                                                                        (0, self.p), random_state=42)
-#         interventions = [set.union(*self.true_targets)] + [set(I) for I in random_interventions]
-#         # ----------------------------------------
-#         # Test that score is the same when computed locally or for
-#         # the whole graph
-#         for centered in [True, False]:
-#             coarse_score = InterventionalScore(self.int_data, fine_grained=False, centered=centered)
-#             fine_score = InterventionalScore(self.int_data, fine_grained=True, centered=centered)
-#             for A in graphs:
-#                 for I in interventions:
-#                     # print("\n\nInterventions set (coarse): ", I)
-#                     # Full score
-#                     full_coarse_score = coarse_score.full_score(A, I)
-#                     full_fine_score = fine_score.full_score(A, [I] * self.e)
-#                     self.assertEqual(full_coarse_score, full_fine_score)
-#                     # Check local scores
-#                     for j in range(self.p):
-#                         pa = np.where(A[:, j] != 0)[0]
-#                         local_coarse_score = coarse_score.local_score(j, pa, I)
-#                         local_fine_score = fine_score.local_score(j, pa, [I] * self.e)
-#                         self.assertEqual(local_coarse_score, local_fine_score)
+    def test_mle_means_1(self):
+        # If all variables are intervened in all environments,
+        # (I-B)^-1 @ nus should equal the sample means
+        # ----------------------------------------
+        # Setup
+        G = NUM_GRAPHS
+        k = 2.1
+        # Generate random graphs
+        graphs = [self.true_A]
+        graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
+        # ----------------------------------------
+        # Test
+        true_sample_means = np.array([np.mean(X, axis=0) for X in self.int_data])
+        score = GnIESScore(self.int_data, set(range(self.p)), centered=False)
+        for A in graphs:
+            B, _, noise_term_means = score._mle_full(A)
+            sample_means = noise_term_means @ np.linalg.inv(np.eye(self.p) - B)
+            # print(true_sample_means)
+            # print(sample_means)
+            self.assertTrue(np.allclose(true_sample_means, sample_means))
 
-#     def test_mle_two_environments(self):
-#         # Test that for two environments, intervening on a variable in
-#         # one yields the same MLE as intervening in both.
-#         # ----------------------------------------
-#         # Setup
-#         G = NUM_GRAPHS
-#         k = 2.1
-#         K = 5
-#         # Generate random graphs
-#         graphs = [self.true_A]
-#         graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
-#         # Generate random intervention targets
-#         targets = []
-#         for _ in range(K):
-#             targets.append(set(sempler.generators.intervention_targets(self.p, 1, (0, self.p), random_state=42)[0]))
+    def test_mle_means_2(self):
+        # If there are no interventions (I-B)^-1 @ nus should equal
+        # the pooled means
+        # ----------------------------------------
+        # Setup
+        G = NUM_GRAPHS
+        k = 2.1
+        # Compute the pooled means
+        assert len(np.unique(self.n_obs) == 1)
+        sample_means = np.array([np.mean(X, axis=0) for X in self.int_data])
+        pooled_means = np.tile(sample_means.mean(axis=0), (self.e, 1))
+        # Generate random graphs
+        graphs = [self.true_A]
+        graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
+        # ----------------------------------------
+        # Test
+        score = GnIESScore(self.int_data, set(), centered=False)
+        for A in graphs:
+            B, _, noise_term_means = score._mle_full(A)
+            sample_means = noise_term_means @ np.linalg.inv(np.eye(self.p) - B)
+            # print(pooled_means)
+            # print(sample_means)
+            self.assertTrue(np.allclose(pooled_means, sample_means))
 
-#         # ----------------------------------------
-#         # Test behaviour of MLE
-#         data = [self.int_data[0], self.int_data[1]]
-#         for centered in [True, False]:
-#             score = InterventionalScore(data, centered=centered)
-#             for A in graphs:
-#                 for t in targets:
-#                     if centered:
-#                         B_one, omegas_one = score._mle_full(A, [t, set()])
-#                         B_both, omegas_both = score._mle_full(A, [t, t])
-#                         t = list(t)
-#                         self.assertTrue(np.allclose(B_one[:, t], B_both[:, t]))
-#                         self.assertTrue(np.allclose(omegas_one[:, t], omegas_both[:, t]))
-#                     else:
-#                         B_one, nus_one, omegas_one = score._mle_full(A, [t, set()])
-#                         B_both, nus_both, omegas_both = score._mle_full(A, [t, t])
-#                         t = list(t)
-#                         self.assertTrue(np.allclose(B_one[:, t], B_both[:, t]))
-#                         self.assertTrue(np.allclose(omegas_one[:, t], omegas_both[:, t]))
-#                         self.assertTrue(np.allclose(nus_one[:, t], nus_both[:, t]))
+    def test_mle_means_3(self):
+        # If a variable has no parents and is intervened, (I-B)^-1 @
+        # nus should equal the sample mean for that variable in that
+        # environments
+        # ----------------------------------------
+        # Setup
+        G = NUM_GRAPHS
+        k = 2.1
+        # Generate random graphs
+        graphs = [self.true_A]
+        graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
+        # ----------------------------------------
+        # Test
+        true_sample_means = np.array([np.mean(X, axis=0) for X in self.int_data])
+        for A in graphs:
+            for j in range(self.p):
+                pa = list(np.where(A[:, j] != 0)[0])
+                if len(pa) > 0:
+                    continue
+                score = GnIESScore(self.int_data, {j}, centered=False)
+                B, _, noise_term_means = score._mle_full(A)
+                sample_means = noise_term_means @ np.linalg.inv(np.eye(self.p) - B)
+                self.assertTrue(np.allclose(true_sample_means[:, j], sample_means[:, j]))
 
-#     def test_mle_means_1(self):
-#         # If all variables are intervened in all environments,
-#         # (I-B)^-1 @ nus should equal the sample means
-#         # ----------------------------------------
-#         # Setup
-#         G = NUM_GRAPHS
-#         k = 2.1
-#         # Generate random graphs
-#         graphs = [self.true_A]
-#         graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
-#         # ----------------------------------------
-#         # Test
-#         true_sample_means = np.array([np.mean(X, axis=0) for X in self.int_data])
-#         score = InterventionalScore(self.int_data, fine_grained=True, centered=False)
-#         for A in graphs:
-#             B, noise_term_means, _ = score._mle_full(A, [set(range(self.p))] * self.e)
-#             sample_means = noise_term_means @ np.linalg.inv(np.eye(self.p) - B)
-#             # print(true_sample_means)
-#             # print(sample_means)
-#             self.assertTrue(np.allclose(true_sample_means, sample_means))
-
-#     def test_mle_means_2(self):
-#         # If there are no interventions (I-B)^-1 @ nus should equal
-#         # the pooled means
-#         # ----------------------------------------
-#         # Setup
-#         G = NUM_GRAPHS
-#         k = 2.1
-#         # Compute the pooled means
-#         assert len(np.unique(self.n_obs) == 1)
-#         sample_means = np.array([np.mean(X, axis=0) for X in self.int_data])
-#         pooled_means = np.tile(sample_means.mean(axis=0), (self.e, 1))
-#         # Generate random graphs
-#         graphs = [self.true_A]
-#         graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
-#         # ----------------------------------------
-#         # Test
-#         score = InterventionalScore(self.int_data, fine_grained=True, centered=False)
-#         for A in graphs:
-#             B, noise_term_means, _ = score._mle_full(A, [set()] * self.e)
-#             sample_means = noise_term_means @ np.linalg.inv(np.eye(self.p) - B)
-#             # print(pooled_means)
-#             # print(sample_means)
-#             self.assertTrue(np.allclose(pooled_means, sample_means))
-
-#     def test_mle_means_3(self):
-#         # If a variable has no parents and is intervened, (I-B)^-1 @
-#         # nus should equal the sample mean for that variable in that
-#         # environments
-#         # ----------------------------------------
-#         # Setup
-#         G = NUM_GRAPHS
-#         k = 2.1
-#         # Generate random graphs
-#         graphs = [self.true_A]
-#         graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
-#         # ----------------------------------------
-#         # Test
-#         true_sample_means = np.array([np.mean(X, axis=0) for X in self.int_data])
-#         score = InterventionalScore(self.int_data, fine_grained=True, centered=False)
-#         for A in graphs:
-#             for j in range(self.p):
-#                 pa = list(np.where(A[:, j] != 0)[0])
-#                 if len(pa) > 0:
-#                     continue
-#                 I = [set([j])] * self.e
-#                 B, noise_term_means, _ = score._mle_full(A, I)
-#                 sample_means = noise_term_means @ np.linalg.inv(np.eye(self.p) - B)
-#                 # print("TRUE (%d):" % j, true_sample_means[:, j])
-#                 # print("RECN (%d):" % j, sample_means[:, j])
-#                 self.assertTrue(np.allclose(true_sample_means[:, j], sample_means[:, j]))
-
-#     def test_centered_vs_uncentered(self):
-#         # The centered score always uses the MLE of the means
-#         # (implicitly by using the sample covariance for the
-#         # likelihood computation). Check that when all variables
-#         # receive interventions and lmbda = 0, both scores match.
-#         # ----------------------------------------
-#         # Setup
-#         G = NUM_GRAPHS
-#         k = 2.1
-#         # Generate random graphs
-#         graphs = [self.true_A]
-#         graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
-#         I = [set(range(self.p))] * self.e
-#         for lmbda in [0, None]:
-#             for A in graphs:
-#                 centered = InterventionalScore(self.int_data, lmbda=lmbda, centered=True)
-#                 uncentered = InterventionalScore(self.int_data, lmbda=lmbda, centered=False)
-#                 self.assertTrue(centered.centered)
-#                 self.assertFalse(uncentered.centered)
-#                 # Check full score
-#                 full_centered = centered.full_score(A, I)
-#                 full_uncentered = uncentered.full_score(A, I)
-#                 if lmbda == 0:
-#                     self.assertTrue(np.isclose(full_centered, full_uncentered))
-#                 else:
-#                     self.assertFalse(np.isclose(full_centered, full_uncentered))
-#                 # Check local scores
-#                 for j in range(self.p):
-#                     pa = np.where(A[:, j] != 0)[0]
-#                     local_centered = centered.local_score(j, pa, I)
-#                     local_uncentered = uncentered.local_score(j, pa, I)
-#                     if lmbda == 0:
-#                         self.assertTrue(np.isclose(local_centered, local_uncentered))
-#                     else:
-#                         self.assertFalse(np.isclose(local_centered, local_uncentered))
+    def test_centered_vs_uncentered(self):
+        # The centered score always uses the MLE of the means
+        # (implicitly by using the sample covariance for the
+        # likelihood computation). Check that when all variables
+        # receive interventions and lmbda = 0, both scores match.
+        # ----------------------------------------
+        # Setup
+        G = NUM_GRAPHS
+        k = 2.1
+        # Generate random graphs
+        graphs = [self.true_A]
+        graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
+        I = set(range(self.p))
+        for lmbda in [0, None]:
+            centered = GnIESScore(self.int_data, I, lmbda=lmbda, centered=True)
+            uncentered = GnIESScore(self.int_data, I, lmbda=lmbda, centered=False)
+            self.assertTrue(centered.centered)
+            self.assertFalse(uncentered.centered)
+            for A in graphs:
+                # Check full score
+                full_centered = centered.full_score(A)
+                full_uncentered = uncentered.full_score(A)
+                if lmbda == 0:
+                    self.assertTrue(np.isclose(full_centered, full_uncentered))
+                else:
+                    self.assertFalse(np.isclose(full_centered, full_uncentered))
+                # Check local scores
+                for j in range(self.p):
+                    pa = np.where(A[:, j] != 0)[0]
+                    local_centered = centered.local_score(j, pa)
+                    local_uncentered = uncentered.local_score(j, pa)
+                    if lmbda == 0:
+                        self.assertTrue(np.isclose(local_centered, local_uncentered))
+                    else:
+                        self.assertFalse(np.isclose(local_centered, local_uncentered))
 
 #     # def test_model_complexity_1(self):
 #     #     # Test that adding intervention targets always increases the
