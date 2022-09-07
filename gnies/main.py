@@ -28,12 +28,10 @@
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from gnies.scores import FixedInterventionalScore
-from gnies.scores.gnies_score import GnIESScore as FixedInterventionalScore
+from gnies.scores import GnIESScore as Score
 import gnies.utils as utils
 import ges
 import numpy as np
-import time
 
 # --------------------------------------------------------------------
 # Public API
@@ -184,7 +182,7 @@ def fit_greedy(
     }
 
     # Iteration 0: initial set
-    score_class = FixedInterventionalScore(data, I0, lmbda=lmbda)
+    score_class = Score(data, I0, lmbda=lmbda)
     current_estimate, current_score = _inner_procedure(score_class, I0, **params)
 
     # Iterate
@@ -287,7 +285,7 @@ def fit_rank(
     p = data[0].shape[1]
     e = len(data)
     full_I = set(range(p))
-    score_class = FixedInterventionalScore(data, full_I, lmbda=lmbda)
+    score_class = Score(data, full_I, lmbda=lmbda)
     current_estimate, current_score = _inner_procedure(score_class, full_I, **params)
     assert utils.is_dag(current_estimate)
     _, omegas = score_class._mle_full(current_estimate)
@@ -296,7 +294,7 @@ def fit_rank(
     # Setup for the greedy outer procedure
     if direction == "forward":
         current_I = set()
-        score_class = FixedInterventionalScore(data, set(), lmbda=lmbda)
+        score_class = Score(data, set(), lmbda=lmbda)
         current_estimate, current_score = _inner_procedure(score_class, current_I, **params)
         verb = "Adding"
         order.reverse()
