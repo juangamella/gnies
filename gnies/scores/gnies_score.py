@@ -274,7 +274,7 @@ class GnIESScore(DecomposableScore):
             mean = self._pooled_means[j] - self._pooled_means[pa] @ b
             means = np.ones(self.e, dtype=float) * mean
         else:
-            means = self.sample_means[:, j] - self.sample_means[:, pa] @ b
+            means = self._sample_means[:, j] - self._sample_means[:, pa] @ b
         return means
 
     def _b_from_omegas(self, j, pa, omegas):
