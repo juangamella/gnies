@@ -263,40 +263,46 @@ class ScoreTests(unittest.TestCase):
         A = np.zeros((self.p, self.p))
         # If no interventions are done, there should be p variances,
         # no matter the number of environments
-        self.assertEqual(self.p, gnies_score.ddof_full(A, set(), 1))
-        self.assertEqual(self.p, gnies_score.ddof_full(A, set(), 2))
-        self.assertEqual(self.p, gnies_score.ddof_full(A, set(), 3))
+        score = GnIESScore(self.int_data, set())
+        self.assertEqual(self.p, score._ddof_full(A))
+        self.assertEqual(self.p, score._ddof_full(A))
+        self.assertEqual(self.p, score._ddof_full(A))
         # If intercept is used
-        self.assertEqual(self.p * 2, gnies_score.ddof_full(A, set(), 3, False))
+        score = GnIESScore(self.int_data, set(), centered=False)
+        self.assertEqual(self.p * 2, score._ddof_full(A))
+        self.assertEqual(self.p * 2, score._ddof_full(A))
+        self.assertEqual(self.p * 2, score._ddof_full(A))
         # A few more
-        e = 3
         I = {1,2,4}
         # 1 for x=0, 3 for x=1, 3 for x=2, 1 for x=3, 3 for x=4
-        # i.e a total of 1 + 3 + 3 + 1 + 3 = 11
-        self.assertEqual(11, gnies_score.ddof_full(A, I, e))
-        self.assertEqual(22, gnies_score.ddof_full(A, I, e, False))
+        # i.e a total of 1 + 6 + 6 + 1 + 6 = 20
+        self.assertEqual(20,GnIESScore(self.int_data, I)._ddof_full(A))
+        self.assertEqual(40,GnIESScore(self.int_data, I, centered=False)._ddof_full(A))
 
     def test_ddof_decomposability(self):
         G = NUM_GRAPHS
-        p = 10
-        e = 5
         rng = np.random.default_rng(42)
         for i in range(G):
-            A = sempler.generators.dag_avg_deg(p, 3, 1, 1, random_state=i)
-            size = rng.integers(0,p)
-            I = set(np.random.choice(range(p), size))
+            A = sempler.generators.dag_avg_deg(self.p, 3, 1, 1, random_state=i)
+            size = rng.integers(0,self.p)
+            I = set(np.random.choice(range(self.p), size))
             # Without intercept
-            full_ddof = gnies_score.ddof_full(A, I, e)
+            score = GnIESScore(self.int_data, I)
+            full_ddof = score._ddof_full(A)
             acc = 0
-            for j in range(p):
-                acc += gnies_score.ddof_local(j, utils.pa(j, A), I, e)
+            print(I, A.sum())
+            for j in range(self.p):
+                print(j,utils.pa(j, A),score._ddof_local(j, utils.pa(j, A)))
+                acc += score._ddof_local(j, utils.pa(j, A))
             self.assertEqual(full_ddof, acc)
             # With intercept
-            full_ddof = gnies_score.ddof_full(A, I, e, False)
+            score = GnIESScore(self.int_data, I, centered=False)
+            full_ddof = score._ddof_full(A)
             acc = 0
-            for j in range(p):
-                acc += gnies_score.ddof_local(j, utils.pa(j, A), I, e, False)
+            for j in range(self.p):
+                acc += score._ddof_local(j, utils.pa(j, A))
             self.assertEqual(full_ddof, acc)
+            # With intercept
 
     def test_score_decomposability_coarse(self):
         # The score should respect decomposability (coarse grained)
@@ -442,9 +448,9 @@ class ScoreTests(unittest.TestCase):
                         self.assertEqual(self.e, len(np.unique(omegas_local[:,j])))
                         self.assertEqual(self.e, len(np.unique(omegas_full[:,j])))
                     # Check DDOF
-                    self.assertEqual(gnies_score.ddof_local(j, set(), I, self.e),
+                    self.assertEqual(score._ddof_local(j, set()),
                                      len(np.unique(omegas_local[:, j])))
-                    self.assertEqual(gnies_score.ddof_local(j, set(), I, self.e),
+                    self.assertEqual(score._ddof_local(j, set()),
                                      len(np.unique(omegas_full[:, j])))
         print("Tested MLE behaviour (centered) for %d cases (%d graphs x %d intervention sets) (%0.2f s)" %
               ((G + 1) * (K + 1), G + 1, K + 1, time.time() - start))
@@ -508,18 +514,10 @@ class ScoreTests(unittest.TestCase):
                         self.assertEqual(self.e, len(np.unique(means_local[:,j])))
                         self.assertEqual(self.e, len(np.unique(means_full[:,j])))
                     # Check DDOF
-                    self.assertEqual(gnies_score.ddof_local(j, set(), I, self.e),
-                                     len(np.unique(omegas_local[:, j])))
-                    self.assertEqual(gnies_score.ddof_local(j, set(), I, self.e),
-                                     len(np.unique(omegas_full[:, j])))
-                    self.assertEqual(gnies_score.ddof_local(j, set(), I, self.e),
-                                     len(np.unique(means_local[:, j])))
-                    self.assertEqual(gnies_score.ddof_local(j, set(), I, self.e),
-                                     len(np.unique(means_full[:, j])))
-                    self.assertEqual(gnies_score.ddof_local(j, set(), I, self.e, centered=False),
-                                     len(np.unique(means_local[:, j])) + len(np.unique(omegas_local[:, j])))
-                    self.assertEqual(gnies_score.ddof_local(j, set(), I, self.e, centered=False),
-                                     len(np.unique(means_full[:, j])) + len(np.unique(means_full[:, j])))
+                    self.assertEqual(score._ddof_local(j, set()),
+                                     len(np.unique(omegas_local[:, j])) + len(np.unique(means_local[:, j])))
+                    self.assertEqual(score._ddof_local(j, set()),
+                                     len(np.unique(omegas_full[:, j])) + len(np.unique(means_full[:, j])))
         print("Tested MLE behaviour (centered) for %d cases (%d graphs x %d intervention sets) (%0.2f s)" %
               ((G + 1) * (K + 1), G + 1, K + 1, time.time() - start))
 

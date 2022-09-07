@@ -166,7 +166,7 @@ class GnIESScore(DecomposableScore):
         else:
             likelihood = log_likelihood_means.full(B, means, omegas, self._data)
         # Penalization term
-        l0_term = self.lmbda * ddof_full(A, self.I, self.e, centered=self.centered)
+        l0_term = self.lmbda * self._ddof_full(A)
         score = likelihood - l0_term
         return score
 
@@ -200,7 +200,7 @@ class GnIESScore(DecomposableScore):
         else:
             likelihood = log_likelihood_means.local(j, b, means, omegas, self._data)
         # Penalization term
-        l0_term = self.lmbda * ddof_local(j, pa, self.I, self.e, centered=self.centered)
+        l0_term = self.lmbda * self._ddof_local(j, pa)
         score = likelihood - l0_term
         return score
 
@@ -291,50 +291,91 @@ class GnIESScore(DecomposableScore):
             weighted_covariance = np.sum(self._sample_covariances * np.reshape(weights, (self.e, 1, 1)), axis=0)
         return _regress(j, pa, weighted_covariance)
 
-    def _alternating_mle(self, j, pa, debug=0):
-        """Estimate the parameters for variable j, i.e. the parent weights and
-        variances (means) of the noise terms."""
-        # If j has no parents, can directly estimate omegas
+    def _alternating_mle(self, j, pa, assume_convex=False, debug=0):
+        """
+        """
+        # If j has no parents no alternating is needed
         if len(pa) == 0:
             b = np.array([])
             omegas = self._omegas_from_b(j, pa, b)
             return b, omegas
         else:
             # Set starting point for optimization procedure
-            b_0 = _regress(j, pa, self._pooled_covariance)
-            omegas_0 = self._omegas_from_b(j, pa, b_0)
-
-            # Components for the alternating (EM-like) optimization procedure
-            # "Expectation" function: given b compute the noise-term variances
-            def e_func(b):
-                return self._omegas_from_b(j, pa, b)
-
-            # "Maximization" function: given variances of noise terms, compute B
-            def m_func(omegas):
-                return self._b_from_omegas(j, pa, omegas)
-
-            # Distance to check for convergence: max of L1 distance between
-            # successive b's and successive omegas
-            def dist(prev_b, prev_omegas, b, omegas):
-                return max(abs(b - prev_b).max(), abs(omegas - prev_omegas).max())
-
-            # Keep track of the objective function if debugging is desired
-            if debug:
-                def objective(B, omegas):
-                    return log_likelihood.local(j, b, omegas, self._sample_covariances, self.n_obs)
-            else:
-                objective = None
-
-            # Run procedure
-            print("    Running alternating optimization procedure") if debug else None
-            (b, omegas) = _em_like(e_func, m_func, b_0, omegas_0, dist,
-                                   tol=self.tol, max_iter=self.max_iter, objective=objective, debug=debug)
+            prev_b = b = _regress(j, pa, self._pooled_covariance)
+            prev_omegas = omegas = self._omegas_from_b(j, pa, b)
+            prev_delta = np.inf
+            # Start alternating optimization
+            for i in range(self.max_iter):
+                omegas = self._omegas_from_b(j, pa, b)
+                b = self._b_from_omegas(j, pa, omegas)
+                delta = max(abs(b - prev_b).max(), abs(omegas - prev_omegas).max())
+                if debug:
+                    print(" %0.4f" % delta, end="")
+                # Check stopping conditions
+                if delta <= self.tol:
+                    print() if debug else None
+                    return b, omegas
+                elif assume_convex and delta > prev_delta:
+                    # if program is convex, an increase in the distance
+                    # between iterations is due to numerical issues. Thus we
+                    # return the results from the previous iteration as we
+                    # assume that's as close as we can get
+                    print() if debug else None
+                    return prev_b, prev_omegas
+                else:
+                    prev_omegas = omegas
+                    prev_b = b
+                    prev_delta = delta
+            print(" MAX ITER REACHED") if debug else None
             return b, omegas
 
-# --------------------------------------------------------------------
-# Functions for the alternating maximization procedure used to find
-# the MLE
+    def _ddof_full(self, A):
+        """Compute the number of free parameters in a model specified by the
+        DAG adjacency and the intervention targets.
 
+        Parameters
+        ----------
+        A : np.array
+            The adjacency matrix of a DAG, where A[i,j] != 0 => i -> j.
+
+        Returns
+        -------
+        ddof : int
+            the number of free parameters in the model
+
+
+        """
+        n_edges = (A != 0).sum()
+        n_variances = len(self.I) * self.e + (self.p - len(self.I))
+        n_intercepts = 0 if self.centered else n_variances
+        return n_edges + n_variances + n_intercepts
+
+
+    def _ddof_local(self, j, pa):
+        """Compute the number of free parameters that are estimated for a
+        variable in the model, given its parents and the intervention
+        targets.
+
+        Parameters
+        ----------
+        j : int
+            The variable's index.
+        pa : list(int)
+            The set of parents.
+
+        Returns
+        -------
+        ddof : int
+            the number of free parameters
+
+        """
+        n_variances = self.e if j in self.I else 1
+        n_intercepts = 0 if self.centered else n_variances
+        return len(pa) + n_variances + n_intercepts
+
+
+# --------------------------------------------------------------------
+# Support functions for the alternating optimization procedure
 
 def _regress(j, pa, cov):
     """Compute the regression coefficients from the covariance matrix i.e.
@@ -350,139 +391,123 @@ def _embedd(b, p, idx):
     vector[idx] = b
     return vector
 
+# --------------------------------------------------------------------
+# Discarded implementation of the alternating optimization procedure
+# (equivalent to the current one)
 
-def _em_like(e_func, m_func, M_0, E_0, dist, tol=1e-6, assume_convex=False, max_iter=100, objective=None, debug=False):
-    """
-    EM-like alternating optimization procedure.
+# def _alternating_mle(self, j, pa, debug=0):
+#         """Estimate the parameters for variable j, i.e. the parent weights and
+#         variances (means) of the noise terms."""
+#         # If j has no parents, can directly estimate omegas
+#         if len(pa) == 0:
+#             b = np.array([])
+#             omegas = self._omegas_from_b(j, pa, b)
+#             return b, omegas
+#         else:
+#             # Set starting point for optimization procedure
+#             b_0 = _regress(j, pa, self._pooled_covariance)
+#             omegas_0 = self._omegas_from_b(j, pa, b_0)
 
-    Parameters
-    ----------
-    e_func : function
-        "Expectation" function
-    m_func : function
-        "Maximization" function
-    M_0 : any
-        initial value for the expectation function
-    E_0 : any
-        initial value for the maximization function. In principle, not
-        needed as the first step of the algorithm overrides this
-        value; however, if the initial values satisfy convergence this
-        allows us to return them : in a user-transparent way).
-    dist : function
-        The distance function used to check convergence. Takes as
-        arguments the E,M from the previous and current iterations and
-        returns a float
-    tol : float
-        Convergence tolerance. Stop if distance between consecutive
-        iterations is below this threshold.
-    assume_convex : boolean
-        if the objective is assumed convex. If true, an increase in
-        the distance of iterations is due to numerical issues, and we
-        stop the iterations at this point, even if the tolerance has
-        not been reached
-    objective : function
-        For debugging purposes, the objective function
-    debug : boolean
-        Print results of each iteration
+#             # Components for the alternating (EM-like) optimization procedure
+#             # "Expectation" function: given b compute the noise-term variances
+#             def e_func(b):
+#                 return self._omegas_from_b(j, pa, b)
 
-    Returns
-    -------
-    M : any
-        the approximated maximizer of the "Maximization quantity"
-    E : any
-        the approximated maximizer of the "Expectation quantity"
+#             # "Maximization" function: given variances of noise terms, compute B
+#             def m_func(omegas):
+#                 return self._b_from_omegas(j, pa, omegas)
 
-    """
-    print("     ", end="") if debug else None
-    prev_E = E = E_0
-    prev_M = M = M_0
-    prev_delta = np.inf
-    for i in range(max_iter):
-        E = e_func(M)  # E-step
-        M = m_func(E)  # M-step
-        delta = dist(prev_M, prev_E, M, E)
-        # Debug outputs
-        if objective is not None and debug:
-            try:
-                value = objective(M, E)
-                print(" %0.16f (%0.16f)" % (delta, value), end="")
-            except Exception as e:
-                print(" %0.16f (%s)" % (delta, e), end="")
-        elif debug:
-            print(" %0.4f" % delta, end="")
-            # Check stopping conditions
-        if delta <= tol:
-            print() if debug else None
-            return M, E
-        elif assume_convex and delta > prev_delta:
-            # if program is convex, an increase in the distance
-            # between iterations is due to numerical issues. Thus we
-            # return the results from the previous iteration as we
-            # assume that's as close as we can get
-            print() if debug else None
-            return prev_M, prev_E
-        else:
-            prev_E = E
-            prev_M = M
-            prev_delta = delta
-    print(" MAX ITER REACHED") if debug else None
-    return M, E
+#             # Distance to check for convergence: max of L1 distance between
+#             # successive b's and successive omegas
+#             def dist(prev_b, prev_omegas, b, omegas):
+#                 return max(abs(b - prev_b).max(), abs(omegas - prev_omegas).max())
 
+#             # Keep track of the objective function if debugging is desired
+#             if debug:
+#                 def objective(B, omegas):
+#                     return log_likelihood.local(j, b, omegas, self._sample_covariances, self.n_obs)
+#             else:
+#                 objective = None
 
-def ddof_full(A, I, e, centered=True):
-    """Compute the number of free parameters in a model specified by the
-    DAG adjacency and the intervention targets.
+#             # Run procedure
+#             print("    Running alternating optimization procedure") if debug else None
+#             (b, omegas) = _em_like(e_func, m_func, b_0, omegas_0, dist,
+#                                    tol=self.tol, max_iter=self.max_iter, objective=objective, debug=debug)
+#             return b, omegas
 
-    Parameters
-    ----------
-    A : np.array
-        The adjacency matrix of a DAG, where A[i,j] != 0 => i -> j.
-    I : list of sets
-        The sets of variables which have received interventions in
-        each environment.
-    centered : bool
-        If we are also fitting an intercept or we assume the data to
-        be centered.
+# def _em_like(e_func, m_func, M_0, E_0, dist, tol=1e-6, assume_convex=False, max_iter=100, objective=None, debug=False):
+#     """
+#     EM-like alternating optimization procedure.
 
-    Returns
-    -------
-    ddof : int
-        the number of free parameters in the model
+#     Parameters
+#     ----------
+#     e_func : function
+#         "Expectation" function
+#     m_func : function
+#         "Maximization" function
+#     M_0 : any
+#         initial value for the expectation function
+#     E_0 : any
+#         initial value for the maximization function. In principle, not
+#         needed as the first step of the algorithm overrides this
+#         value; however, if the initial values satisfy convergence this
+#         allows us to return them : in a user-transparent way).
+#     dist : function
+#         The distance function used to check convergence. Takes as
+#         arguments the E,M from the previous and current iterations and
+#         returns a float
+#     tol : float
+#         Convergence tolerance. Stop if distance between consecutive
+#         iterations is below this threshold.
+#     assume_convex : boolean
+#         if the objective is assumed convex. If true, an increase in
+#         the distance of iterations is due to numerical issues, and we
+#         stop the iterations at this point, even if the tolerance has
+#         not been reached
+#     objective : function
+#         For debugging purposes, the objective function
+#     debug : boolean
+#         Print results of each iteration
 
+#     Returns
+#     -------
+#     M : any
+#         the approximated maximizer of the "Maximization quantity"
+#     E : any
+#         the approximated maximizer of the "Expectation quantity"
 
-    """
-    p = len(A)
-    # We estimate a weight for each edge
-    n_edges = (A != 0).sum()
-    n_variances = len(I) * e + (p - len(I))
-    n_intercepts = 0 if centered else n_variances
-    return n_edges + n_variances + n_intercepts
-
-
-def ddof_local(j, pa, I, e, centered=True):
-    """Compute the number of free parameters that are estimated for a
-    variable in the model, given its parents and the intervention
-    targets.
-
-    Parameters
-    ----------
-    j : int
-        The variable's index.
-    pa : list(int)
-        The set of parents.
-    I : list of sets
-        The sets of variables which have received interventions in
-        each environment.
-    centered : bool
-        If we are also fitting an intercept or we assume the data to
-        be centered.
-
-    Returns
-    -------
-    ddof : int
-        the number of free parameters
-
-    """
-    n_variances = e if j in I else 1
-    n_intercepts = 0 if centered else n_variances
-    return len(pa) + n_variances + n_intercepts
+#     """
+#     print("     ", end="") if debug else None
+#     prev_E = E = E_0
+#     prev_M = M = M_0
+#     prev_delta = np.inf
+#     for i in range(max_iter):
+#         E = e_func(M)  # E-step
+#         M = m_func(E)  # M-step
+#         delta = dist(prev_M, prev_E, M, E)
+#         # Debug outputs
+#         if objective is not None and debug:
+#             try:
+#                 value = objective(M, E)
+#                 print(" %0.16f (%0.16f)" % (delta, value), end="")
+#             except Exception as e:
+#                 print(" %0.16f (%s)" % (delta, e), end="")
+#         elif debug:
+#             print(" %0.4f" % delta, end="")
+#             # Check stopping conditions
+#         if delta <= tol:
+#             print() if debug else None
+#             return M, E
+#         elif assume_convex and delta > prev_delta:
+#             # if program is convex, an increase in the distance
+#             # between iterations is due to numerical issues. Thus we
+#             # return the results from the previous iteration as we
+#             # assume that's as close as we can get
+#             print() if debug else None
+#             return prev_M, prev_E
+#         else:
+#             prev_E = E
+#             prev_M = M
+#             prev_delta = delta
+#     print(" MAX ITER REACHED") if debug else None
+#     return M, E
