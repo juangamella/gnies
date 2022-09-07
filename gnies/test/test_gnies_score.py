@@ -664,46 +664,35 @@ class ScoreTests(unittest.TestCase):
                         self.assertGreaterEqual(new_score, current_score)
                     current_score, I = new_score, new_I
 
-    # def test_model_complexity_2(self):
-    #     # Test that adding edges to a graph always increases the score
-    #     # when lambda=0
-    #     # ----------------------------------------
-    #     # Setup
-    #     G = NUM_GRAPHS * 10
-    #     k = 2.1
-    #     runs = 10
-    #     # Generate random graphs
-    #     graphs = [self.true_A]
-    #     graphs += [sempler.generators.dag_avg_deg(self.p, k) for _ in range(G)]
-    #     # ----------------------------------------
-    #     # Test
-    #     for centered in [True, False]:
-    #         score = InterventionalScore(self.int_data, lmbda=0, debug=0,
-    #                                   centered=centered, max_iter=500)
-    #         for k, A in enumerate(graphs):
-    #             print("Graph", k)
-    #             random_targets = sempler.generators.intervention_targets(self.p, self.e, (0, self.p))
-    #             I = [set(i) for i in random_targets]
-    #             I = [set()] * self.e
-    #             current_score = score.full_score(A, I)
-    #             to,fro = np.where(A == 0)
-    #             candidate_edges = list(zip(to,fro))
-    #             for _ in range(runs):
-    #                 print("  %d edges" % A.sum())
-    #                 if len(candidate_edges) == 0:
-    #                     print("  Ran out of possible edges.")
-    #                     break
-    #                 to,fro = candidate_edges[0]
-    #                 candidate_edges = candidate_edges[1:]
-    #                 # Build new graph
-    #                 new_A = A.copy()
-    #                 new_A[to,fro] = 1
-    #                 if not utils.is_dag(new_A):
-    #                     continue
-    #                 # Compute new score
-    #                 new_score = score.full_score(new_A, I)
-    #                 if new_score < current_score:
-    #                     print("-------------------")
-    #                     print("centered =", centered, A, new_A)
-    #                     self.assertGreaterEqual(new_score, current_score)
-    #                 current_score, A = new_score, new_A
+    def test_model_complexity_2(self):
+        # Test that adding edges to a graph always increases the score
+        # when lambda=0
+        # ----------------------------------------
+        # Setup
+        G = NUM_GRAPHS * 10
+        k = 2.1
+        runs = 10
+        # Generate random graphs
+        graphs = [self.true_A]
+        graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
+        # ----------------------------------------
+        # Test
+        for centered in [True, False]:
+            random_targets = sempler.generators.intervention_targets(self.p, self.e, (0, self.p))
+            I = set.union(*[set(i) for i in random_targets])
+            score = GnIESScore(self.int_data, I, lmbda=0, centered=centered)
+            for k, A in enumerate(graphs):
+                print("Graph", k)
+                current_score = score.full_score(A)
+                for r in range(runs):
+                    print("  %d edges" % A.sum())
+                    try:
+                        new_A = utils.add_edges(A, 1, random_state=r)
+                    except ValueError:
+                        break
+                    new_score = score.full_score(new_A)
+                    if new_score < current_score:
+                        print("-------------------")
+                        print("centered =", centered, A, new_A)
+                        self.assertGreaterEqual(new_score, current_score)
+                    current_score, A = new_score, new_A
