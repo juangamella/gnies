@@ -39,15 +39,54 @@ import gnies.utils as utils
 import time
 import os
 
-import gnies.scores.interventional as interventional
-from gnies.scores import InterventionalScore
-from gnies.scores.gnies_score import GnIESScore as FixedInterventionalScore
+from gnies.scores import FixedInterventionalScore
+from gnies.scores.gnies_score import GnIESScore
 
 # ---------------------------------------------------------------------
 # Tests for the l0-penalized scores
 
 # Number of random graphs generated for each test that uses random graphs
 NUM_GRAPHS = 2
+
+
+class ScoreTests(unittest.TestCase):
+    true_A = np.array([[0, 0, 1, 0, 0],
+                       [0, 0, 1, 0, 0],
+                       [0, 0, 0, 1, 1],
+                       [0, 0, 0, 0, 1],
+                       [0, 0, 0, 0, 0]])
+    factorization = [(4, (2, 3)), (3, (2,)), (2, (0, 1)), (0, ()), (1, ())]
+    true_B = true_A * np.random.uniform(1, 2, size=true_A.shape)
+    scm = sempler.LGANM(true_B, (0, 0), (0.3, 0.4))
+    p = len(true_A)
+    n = np.random.randint(100, 10000)
+    true_targets = [set(), {0}, {1}, {2}, {3}, {4}]
+    interventions = [{0: (1.1, 1.0)},
+                     {1: (2.2, 1.1)},
+                     {2: (3.3, 1.2)},
+                     {3: (4.4, 1.3)},
+                     {4: (5.5, 1.4)}]
+    obs_data = scm.sample(n=n)
+    int_data = [obs_data]
+    n_obs = [n] * (len(interventions) + 1)
+    e = len(interventions) + 1
+    # Sample interventional distributions and construct true interventional
+    # variances for later reference in tests
+    interventional_variances = np.tile(scm.variances, (len(interventions) + 1, 1))
+    interventional_means = np.tile(scm.means, (len(interventions) + 1, 1))
+    for i, intervention in enumerate(interventions):
+        int_data.append(scm.sample(n=n, shift_interventions=intervention))
+        for (target, params) in intervention.items():
+            interventional_variances[i + 1, target] += params[1]
+            interventional_means[i + 1, target] += params[0]
+    # Set up score instantces
+    I = np.eye(scm.p)
+    print("Sample size =", n)
+    print("True noise means:\n", interventional_means)
+    print("True noise variances:\n", interventional_variances)
+    print("True connectivity:\n", scm.W)
+
+
 
 class ImplementationChangeTests(unittest.TestCase):
     """Test whether the actual values computed by the score change"""
@@ -120,7 +159,7 @@ class ImplementationChangeTests(unittest.TestCase):
                 print('Saved targets to "%s"' % self.targets_file)
 
             # Compute and save scores
-            full_scores, local_scores = score_graphs(graphs_to_score, targets_to_score, datasets)
+            full_scores, local_scores, _ = score_graphs(FixedInterventionalScore, graphs_to_score, targets_to_score, datasets)
             with open(self.full_scores_file, 'wb') as f:
                 np.save(f, full_scores)
                 print('Saved full_scores to "%s"' % self.full_scores_file)
@@ -134,7 +173,7 @@ class ImplementationChangeTests(unittest.TestCase):
         graphs = np.load(self.graphs_file)
         targets = np.load(self.targets_file, allow_pickle=True)
         datasets = np.load(self.datasets_file)
-        computed_full_scores, computed_local_scores, mask = score_graphs(graphs, targets, datasets)
+        computed_full_scores, computed_local_scores, mask = score_graphs(GnIESScore, graphs, targets, datasets)
         full_scores = np.load(self.full_scores_file)
         local_scores = np.load(self.local_scores_file)
         diff_full = (computed_full_scores - full_scores)
@@ -164,12 +203,12 @@ class ImplementationChangeTests(unittest.TestCase):
                    {3,4,5},
                    {4,5},
                    {4}]
-        _, current_scores,_ = score_graphs(graphs, [targets[0]], datasets)
+        _, current_scores,_ = score_graphs(GnIESScore, graphs, [targets[0]], datasets)
         for i in range(1, len(targets)):
             change = (targets[i-1] - targets[i]) | (targets[i] - targets[i-1])
             constant = set(range(p)) - change
             print("Comparing I = %s vs I = %s - change = %s" % (targets[i], targets[i-1], change))
-            _,next_scores,_ = score_graphs(graphs, [targets[i]], datasets)
+            _,next_scores,_ = score_graphs(GnIESScore, graphs, [targets[i]], datasets)
             print("Variables which changed")
             for j in change:
                 diff = abs(next_scores[:,:,:,j] - current_scores[:,:,:,j])
@@ -183,7 +222,7 @@ class ImplementationChangeTests(unittest.TestCase):
             current_scores = next_scores
 
 
-def score_graphs(graphs, targets, datasets, debug=False):
+def score_graphs(score_class, graphs, targets, datasets, debug=False):
     # Set up score arrays
     p = graphs.shape[1]
     full_scores = np.zeros((len(graphs), len(targets), len(datasets)), dtype=float)
@@ -194,7 +233,7 @@ def score_graphs(graphs, targets, datasets, debug=False):
     for k, data in enumerate(datasets):
         for j, I in enumerate(targets):
             print("Computing scores for dataset %d and targets %s" % (k + 1, targets)) if debug else None
-            score = FixedInterventionalScore(data, I)
+            score = score_class(data, I)
             for i, A in enumerate(graphs):
                 print("  Graph", i+1) if debug else None
                 full_score = score.full_score(A)
