@@ -628,174 +628,82 @@ class ScoreTests(unittest.TestCase):
                     else:
                         self.assertFalse(np.isclose(local_centered, local_uncentered))
 
-#     # def test_model_complexity_1(self):
-#     #     # Test that adding intervention targets always increases the
-#     #     # score when lambda=0
-#     #     # ----------------------------------------
-#     #     # Setup
-#     #     G = NUM_GRAPHS * 10
-#     #     k = 2.1
-#     #     runs = 10
-#     #     # Generate random graphs
-#     #     graphs = [self.true_A]
-#     #     graphs += [sempler.generators.dag_avg_deg(self.p, k) for _ in range(G)]
-#     #     # ----------------------------------------
-#     #     # Test
-#     #     for centered in [True, False]:
-#     #         score = InterventionalScore(self.int_data, lmbda=0, debug=0,
-#     #                                   centered=centered, max_iter=500)
-#     #         for k, A in enumerate(graphs):
-#     #             print("Graph", k)
-#     #             I = [set()] * self.e
-#     #             current_score = score.full_score(A, I)
-#     #             for _ in range(runs):
-#     #                 print("  ", I)
-#     #                 # If the intervention targets are already all
-#     #                 # targets, stop
-#     #                 if I == [set(range(self.p))] * self.e:
-#     #                     break
-#     #                 # Build new intervention list
-#     #                 new_I = I.copy()
-#     #                 while new_I == I:
-#     #                     new_targets = sempler.generators.intervention_targets(
-#     #                         self.p, self.e, (0, 1))
-#     #                     for i in range(self.e):
-#     #                         new_I[i] = new_I[i] | set(new_targets[i])
-#     #                 # Compute new score
-#     #                 new_score = score.full_score(A, new_I)
-#     #                 if new_score < current_score:
-#     #                     print("-------------------")
-#     #                     print("centered =", centered, I, new_I)
-#     #                     self.assertGreaterEqual(new_score, current_score)
-#     #                 current_score, I = new_score, new_I
+    def test_model_complexity_1(self):
+        # Test that adding intervention targets always increases the
+        # score when lambda=0
+        # ----------------------------------------
+        # Setup
+        G = NUM_GRAPHS * 10
+        k = 2.1
+        runs = 10
+        # Generate random graphs
+        graphs = [self.true_A]
+        graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
+        # ----------------------------------------
+        # Test
+        for centered in [True, False]:
+            I = set()
+            score = GnIESScore(self.int_data, I, lmbda=0, centered=centered)
+            for k, A in enumerate(graphs):
+                print("Graph", k)
+                current_score = score.full_score(A)
+                for r in range(self.p):
+                    print("  ", I)
+                    # If the intervention targets are already all
+                    # targets, stop
+                    if len(I) == self.p:
+                        break
+                    # Build new intervention list
+                    new_I = I | {r}
+                    score.set_I(new_I)
+                    # Compute new score
+                    new_score = score.full_score(A)
+                    if new_score < current_score:
+                        print("-------------------")
+                        print("centered =", centered, I, new_I)
+                        self.assertGreaterEqual(new_score, current_score)
+                    current_score, I = new_score, new_I
 
-#     # def test_model_complexity_2(self):
-#     #     # Test that adding edges to a graph always increases the score
-#     #     # when lambda=0
-#     #     # ----------------------------------------
-#     #     # Setup
-#     #     G = NUM_GRAPHS * 10
-#     #     k = 2.1
-#     #     runs = 10
-#     #     # Generate random graphs
-#     #     graphs = [self.true_A]
-#     #     graphs += [sempler.generators.dag_avg_deg(self.p, k) for _ in range(G)]
-#     #     # ----------------------------------------
-#     #     # Test
-#     #     for centered in [True, False]:
-#     #         score = InterventionalScore(self.int_data, lmbda=0, debug=0,
-#     #                                   centered=centered, max_iter=500)
-#     #         for k, A in enumerate(graphs):
-#     #             print("Graph", k)
-#     #             random_targets = sempler.generators.intervention_targets(self.p, self.e, (0, self.p))
-#     #             I = [set(i) for i in random_targets]
-#     #             I = [set()] * self.e
-#     #             current_score = score.full_score(A, I)
-#     #             to,fro = np.where(A == 0)
-#     #             candidate_edges = list(zip(to,fro))
-#     #             for _ in range(runs):
-#     #                 print("  %d edges" % A.sum())
-#     #                 if len(candidate_edges) == 0:
-#     #                     print("  Ran out of possible edges.")
-#     #                     break
-#     #                 to,fro = candidate_edges[0]
-#     #                 candidate_edges = candidate_edges[1:]
-#     #                 # Build new graph
-#     #                 new_A = A.copy()
-#     #                 new_A[to,fro] = 1
-#     #                 if not utils.is_dag(new_A):
-#     #                     continue
-#     #                 # Compute new score
-#     #                 new_score = score.full_score(new_A, I)
-#     #                 if new_score < current_score:
-#     #                     print("-------------------")
-#     #                     print("centered =", centered, A, new_A)
-#     #                     self.assertGreaterEqual(new_score, current_score)
-#     #                 current_score, A = new_score, new_A
-
-
-# class FixedInterventionTests(unittest.TestCase):
-
-#     def test_equality_coarse_grained(self):
-#         G = int(NUM_GRAPHS / 2)
-#         p = 10
-#         k = 2.8
-#         n = 1000
-#         envs = 5
-#         tests_per_case = 5
-#         graphs_to_score = 5
-#         for i in range(G):
-#             for centered in [True, False]:
-#                 print("Test case %d (centered = %s)" % (i, centered))
-#                 # Sample an SCM and interventional data
-#                 W = sempler.generators.dag_avg_deg(p, k, 1, 2)
-#                 scm = sempler.LGANM(W, (0, 1), (1, 2))
-#                 all_targets = sempler.generators.intervention_targets(p, envs - 1, (1, 3))
-#                 XX = [scm.sample(n)]
-#                 for targets in all_targets:
-#                     interventions = dict(
-#                         (t, (np.random.uniform(1, 2), np.random.uniform(1, 2))) for t in targets)
-#                     sample = scm.sample(n, noise_interventions=interventions)
-#                     XX.append(sample)
-#                 # Test equality of the two scores for random intervention
-#                 # targets
-#                 graphs = [sempler.generators.dag_avg_deg(
-#                     p, k, 0, 3) for _ in range(graphs_to_score)]
-#                 coarse_score = InterventionalScore(XX, fine_grained=False, centered=centered)
-#                 for j in range(tests_per_case):
-#                     print("  intervention set %d" % j)
-#                     I = set(sempler.generators.intervention_targets(p, 1, (0, 10))[0])
-#                     fixed_score = FixedInterventionalScore(
-#                         XX, I, fine_grained=False, centered=centered)
-#                     # Test global score
-#                     scores_coarse = [coarse_score.full_score(A, I) for A in graphs]
-#                     scores_fixed = [fixed_score.full_score(A) for A in graphs]
-#                     self.assertTrue(scores_fixed == scores_coarse)
-#                     # Test local score (take factorizations from first to-score graph)
-#                     factorizations = [(i, utils.pa(i, graphs[0])) for i in range(p)]
-#                     scores_coarse = [coarse_score.local_score(
-#                         x, pa, I) for (x, pa) in factorizations]
-#                     scores_fixed = [fixed_score.local_score(x, pa) for (x, pa) in factorizations]
-#                     self.assertTrue(scores_fixed == scores_coarse)
-
-#     def test_equality_fine_grained(self):
-#         G = int(NUM_GRAPHS / 2)
-#         p = 10
-#         k = 2.8
-#         n = 1000
-#         envs = 5
-#         tests_per_case = 5
-#         graphs_to_score = 5
-#         for i in range(G):
-#             for centered in [True, False]:
-#                 print("Test case %d (centered = %s)" % (i, centered))
-#                 # Sample an SCM and interventional data
-#                 W = sempler.generators.dag_avg_deg(p, k, 1, 2)
-#                 scm = sempler.LGANM(W, (0, 1), (1, 2))
-#                 all_targets = sempler.generators.intervention_targets(p, envs - 1, (1, 3))
-#                 XX = [scm.sample(n)]
-#                 for targets in all_targets:
-#                     interventions = dict(
-#                         (t, (np.random.uniform(1, 2), np.random.uniform(1, 2))) for t in targets)
-#                     sample = scm.sample(n, noise_interventions=interventions)
-#                     XX.append(sample)
-#                 # Test equality of the two scores for random intervention
-#                 # targets
-#                 graphs = [sempler.generators.dag_avg_deg(
-#                     p, k, 0, 3) for _ in range(graphs_to_score)]
-#                 fine_score = InterventionalScore(XX, fine_grained=True, centered=centered)
-#                 for j in range(tests_per_case):
-#                     print("  intervention set %d" % j)
-#                     I = [set(targets)
-#                          for targets in sempler.generators.intervention_targets(p, envs, (0, 3))]
-#                     fixed_score = FixedInterventionalScore(
-#                         XX, I, fine_grained=True, centered=centered)
-#                     # Test global score
-#                     scores_fine = [fine_score.full_score(A, I) for A in graphs]
-#                     scores_fixed = [fixed_score.full_score(A) for A in graphs]
-#                     self.assertTrue(scores_fixed == scores_fine)
-#                     # Test local score (take factorizations from first to-score graph)
-#                     factorizations = [(i, utils.pa(i, graphs[0])) for i in range(p)]
-#                     scores_fine = [fine_score.local_score(x, pa, I) for (x, pa) in factorizations]
-#                     scores_fixed = [fixed_score.local_score(x, pa) for (x, pa) in factorizations]
-#                     self.assertTrue(scores_fixed == scores_fine)
+    # def test_model_complexity_2(self):
+    #     # Test that adding edges to a graph always increases the score
+    #     # when lambda=0
+    #     # ----------------------------------------
+    #     # Setup
+    #     G = NUM_GRAPHS * 10
+    #     k = 2.1
+    #     runs = 10
+    #     # Generate random graphs
+    #     graphs = [self.true_A]
+    #     graphs += [sempler.generators.dag_avg_deg(self.p, k) for _ in range(G)]
+    #     # ----------------------------------------
+    #     # Test
+    #     for centered in [True, False]:
+    #         score = InterventionalScore(self.int_data, lmbda=0, debug=0,
+    #                                   centered=centered, max_iter=500)
+    #         for k, A in enumerate(graphs):
+    #             print("Graph", k)
+    #             random_targets = sempler.generators.intervention_targets(self.p, self.e, (0, self.p))
+    #             I = [set(i) for i in random_targets]
+    #             I = [set()] * self.e
+    #             current_score = score.full_score(A, I)
+    #             to,fro = np.where(A == 0)
+    #             candidate_edges = list(zip(to,fro))
+    #             for _ in range(runs):
+    #                 print("  %d edges" % A.sum())
+    #                 if len(candidate_edges) == 0:
+    #                     print("  Ran out of possible edges.")
+    #                     break
+    #                 to,fro = candidate_edges[0]
+    #                 candidate_edges = candidate_edges[1:]
+    #                 # Build new graph
+    #                 new_A = A.copy()
+    #                 new_A[to,fro] = 1
+    #                 if not utils.is_dag(new_A):
+    #                     continue
+    #                 # Compute new score
+    #                 new_score = score.full_score(new_A, I)
+    #                 if new_score < current_score:
+    #                     print("-------------------")
+    #                     print("centered =", centered, A, new_A)
+    #                     self.assertGreaterEqual(new_score, current_score)
+    #                 current_score, A = new_score, new_A
