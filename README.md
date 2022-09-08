@@ -14,7 +14,7 @@ There was an effort to keep dependencies on other packages to a minimum. As a re
 
 ## Running the algorithm
 
-GnIES can be run through the function `gnies.fit`.
+GnIES can be run through the function `gnies.fit`:
 
 ```python
 def fit(
