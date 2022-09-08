@@ -1,6 +1,6 @@
 # GnIES Algorithm for Causal Discovery
 
-This is a python implementation of the GnIES algorithm from the paper [*"<TODO: Title>"*](<TODO: arxiv link>) by Juan L. Gamella, Armeen Taeb, Christina Heinze-Deml and Peter Bühlmann.
+This repository contains a python implementation of the GnIES algorithm from the paper [*"<TODO: Title>"*](<TODO: arxiv link>) by Juan L. Gamella, Armeen Taeb, Christina Heinze-Deml and Peter Bühlmann.
 
 ### Installation
 
@@ -9,6 +9,8 @@ You can clone this repo or install the python package via pip:
 ```bash
 pip install gnies
 ```
+
+There was an effort to dependencies on other packages to a minimum. As a result the package only depends on [`numpy`](https://numpy.org/) and [`ges`](https://github.com/juangamella/ges) (with the former being the only dependency of the latter).
 
 ## Running the algorithm
 
