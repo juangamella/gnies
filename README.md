@@ -43,7 +43,7 @@ def fit(
 - **estimate** (np.array): the adjacency matrix of the estimated CPDAG.
 - **total_score** (float): the score of the estimate.
 
-We offer the two approaches for selection of variables in the outer procedure of the algorithm; they can be set with the parameter `approach`, or directly through the functions `gnies.fit_greedy` and `gnies.fit_rank` in the `[gnies.main](gnies/main.py)` module. With `approach='greedy'` the greedy approach is selected, which corresponds to the results from figures 1,2 and 3 in the paper; the approach consists in greedily adding variables to the intervention targets estimate. With `approach='rank'`, the faster ranking procedure is run, at a small cost in the accuracy of the estimates (see figure <TODO: figure> in the paper).
+We offer the two approaches for selection of variables in the outer procedure of the algorithm; they can be set with the parameter `approach`, or directly through the functions [`gnies.fit_greedy`](<TODO:link>) and [`gnies.fit_rank`](<TODO:link>) in the [`gnies.main`](gnies/main.py) module. With `approach='greedy'` the greedy approach is selected, which corresponds to the results from figures 1,2 and 3 in the paper; the approach consists in greedily adding variables to the intervention targets estimate. With `approach='rank'`, the faster ranking procedure is run, at a small cost in the accuracy of the estimates (see figure <TODO: figure> in the paper).
 
 **Example using the greedy approach**
 
