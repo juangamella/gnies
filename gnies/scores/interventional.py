@@ -28,12 +28,9 @@
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"""This module contains the implementation of the GnIES score (see
-"Score Function" in section 4 of the GnIES paper). The score is
-implemented by the FixedInterventionalScore class.
-
-GnIES paper: <TODO: arxiv link>
-
+"""
+This module contains classes implementing interventional scores with different definitions
+for the intervention targets.
 """
 
 import numpy as np
