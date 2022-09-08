@@ -10,7 +10,7 @@ You can clone this repo or install the python package via pip:
 pip install gnies
 ```
 
-There was an effort to dependencies on other packages to a minimum. As a result the package only depends on [`numpy`](https://numpy.org/) and [`ges`](https://github.com/juangamella/ges) (with the former being the only dependency of the latter).
+There was an effort to keep dependencies on other packages to a minimum. As a result the package only depends on [`numpy`](https://numpy.org/) and [`ges`](https://github.com/juangamella/ges) (with the former being the only dependency of the latter).
 
 ## Running the algorithm
 
