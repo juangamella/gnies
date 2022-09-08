@@ -29,8 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 """This module contains the implementation of the GnIES score (see
-"Score Function" in section 4 of the GnIES paper). The score is
-implemented by the FixedInterventionalScore class.
+"Score Function" in section 4 of the GnIES paper).
 
 GnIES paper: <TODO: arxiv link>
 
@@ -43,17 +42,16 @@ from .decomposable_score import DecomposableScore
 import gnies.utils as utils
 
 # --------------------------------------------------------------------
-# Interventional Score Class (see FixedInterventionalScore below for GnIES score)
+# GnIES Score Class
 
 class GnIESScore(DecomposableScore):
-    """TODO.
-
-    The GnIES score is the score with `fine_grained=False` and is
-    implemented in the `FixedInterventionalScore` class, which
-    inherits from this one.
+    """The class contains a cached implementation of the GnIES score
+    presented in the paper.
 
     Parameters
     ----------
+    I : set of ints
+        The intervention targets.
     e : int
         The number of environments.
     p : int
@@ -72,12 +70,6 @@ class GnIESScore(DecomposableScore):
         procedure; when the maximum distance between elements of
         consecutive Bs is below this threshold, stop the alternating
         optimization and return the latest estimate.
-    fine_grained : bool
-        How finely we specify intervention targets. `True` means we
-        define intervention targets per environment; `False` means we
-        allow the noise-term distribution of an intervened variable to
-        vary across all environments. The latter is used for the
-        computation of the GnIES score.
     centered : bool
         Whether the data is centered before computing the score
         (`centered=True`), or the noise-term means are also estimated
@@ -86,8 +78,7 @@ class GnIESScore(DecomposableScore):
     """
 
     def __init__(self, data, I, centered=True, lmbda=None, tol=1e-16, max_iter=10, cache=True):
-        """
-        Creates a new instance of the score.
+        """Creates a new instance of the score.
 
         Parameters
         ----------
@@ -95,26 +86,27 @@ class GnIESScore(DecomposableScore):
             A list with the samples from the different environments, where
             each sample is an array with columns corresponding to
             variables and rows to observations.
-        centered : bool
+        I : set of ints
+            The intervention targets.
+        centered : bool, default=True
             Whether the data is centered before computing the score
-            (`centered=True`), or the noise-term means are also estimated
-            respecting the constraints imposed by `I`.
-        fine_grained : bool
-            How finely we specify intervention targets. `True` means we
-            define intervention targets per environment; `False` means we
-            allow the noise-term distribution of an intervened variable to
-            vary across all environments. The latter is used for the
-            computation of the GnIES score.
+            (`centered=True`), or the noise-term means are also
+            estimated respecting the constraints imposed by `I`. The
+            latter incurrs a larger penalization term as more
+            parameters have to be estimated.
         lmbda : float
             The penalization parameter used in the computation of the score.
         tol : float
-            The threshold of convergence for the alternating optimization
-            procedure; when the maximum distance between elements of
-            consecutive Bs is below this threshold, stop the alternating
-            optimization and return the latest estimate.
+            The threshold of convergence for the alternating
+            optimization procedure; when the maximum distance between
+            estimated coefficients and variances is below this
+            threshold, the alternating optimization procedure is
+            halted.
         max_iter : float
             The maximum number of iterations for the alternating
             optimization procedure.
+        cache : bool, default=True
+            Whether the computation of the local score should be cached.
         """
         super().__init__(data, cache=cache)
         self.I = I.copy()
@@ -137,14 +129,26 @@ class GnIESScore(DecomposableScore):
             self._pooled_means = np.sum(self._sample_means * np.reshape(self.n_obs, (self.e, 1)), axis=0) / self.N
 
     def set_I(self, new_I):
+        """Update the intervention targets used to compute the score, removing
+        from the cache all local score computations which are invalidated by
+        the change, i.e. those of nodes who were added or removed from I.
+
+        Note: prune_cache is implemented in the parent class
+        `DecomposableScore`.
+
+        Parameters
+        ----------
+        new_I : set of ints
+            The new intervention targets.
+
+        """
         change = (self.I - new_I) | (new_I - self.I)
         self.prune_cache(change)
         self.I = new_I.copy()
 
     def full_score(self, A):
         """
-        Given a DAG adjacency A, return the l0-penalized log-likelihood of
-        a collection of samples from different environments, by finding
+        Given a DAG adjacency A, return its score by finding
         the maximum likelihood estimates of the corresponding connectivity
         matrix (weights) and noise term variances.
 
@@ -158,6 +162,11 @@ class GnIESScore(DecomposableScore):
         score : float
             the penalized log-likelihood score
 
+        Raises
+        ------
+        ValueError :
+            If the given adjacency is not a DAG or is not a `self.p x
+            self.p` matrix.
         """
         # Compute MLE and its likelihood
         B, omegas, means = self._mle_full(A)
@@ -170,27 +179,43 @@ class GnIESScore(DecomposableScore):
         score = likelihood - l0_term
         return score
 
-    # def local_score(self, x, pa):
-    #   already defined in parent class DecomposableScore, which calls _compute_local_score
+    def local_score(self, j, pa):
+        """Given a node and its parents, compute its associated term in the score.
 
-    def _compute_local_score(self, j, pa):
-        """
-        Given a node and its parents, return the local l0-penalized
-        log-likelihood of a collection of samples from different
-        environments, by finding the maximum likelihood estimates of the
-        weights and noise term variances.
+        Note: the computation is implemented in
+        `_compute_local_score`; local_score in the parent class
+        `DecomposableScore` implements the cached wrapper.
 
         Parameters
         ----------
         j : int
-            a node
+            The index of the node.
         pa : set of ints
-            the node's parents
+            The parents of the variable
 
         Returns
         -------
         score : float
-            the penalized log-likelihood score
+            The local score.
+
+        """
+        return super().local_score(j, pa)
+
+    def _compute_local_score(self, j, pa):
+        """
+        Given a node and its parents, compute its associated term in the score.
+
+        Parameters
+        ----------
+        j : int
+            The index of the node.
+        pa : set of ints
+            The parents of the variable
+
+        Returns
+        -------
+        score : float
+            The local score.
 
         """
         b, omegas, means = self._mle_local(j, pa)
@@ -208,9 +233,9 @@ class GnIESScore(DecomposableScore):
     #  Functions for the maximum likelihood estimation of the
     #  weights/variances
     def _mle_full(self, A):
-        """Given the DAG adjacency A and observations, compute the maximum
-        likelihood estimate of the connectivity weights and noise
-        variances, returning them and the resulting log likelihood.
+        """Given the DAG adjacency A, compute the maximum
+        likelihood estimate of the connectivity weights and noise-term
+        variances and means.
 
         Parameters
         ----------
@@ -220,11 +245,29 @@ class GnIESScore(DecomposableScore):
         Returns
         -------
         B : np.array
-            the MLE estimate of the connectivity matrix (the weights)
+            The MLE estimate of the connectivity matrix (the weights).
         omegas : np.array
-            the MLE estimate of the noise variances of each variable
+            The MLE estimate of the noise-term variances for each
+            environment and variable, in a `self.e x self.p` array.
+            variables.
+        means : np.array or NoneType
+            The MLE estimate of the noise-term means for each
+            environment and variable, in a `self.e x self.p` array. Is
+            `None` if `self.centered=True`.
+
+        Raises
+        ------
+        ValueError :
+            If the given adjacency is not a DAG or is not a `self.p x
+            self.p` matrix.
 
         """
+        # Check inputs
+        if A.shape != (self.p, self.p):
+            raise ValueError('A is not a %d x %d matrix' % (self.p, self.p))
+        elif not utils.is_dag(A):
+            raise ValueError('The given adjacency A is not a DAG.')
+        # Compute score
         B = np.zeros((self.p, self.p), dtype=float)
         Omegas = np.zeros((self.e, self.p), dtype=float)
         Means = []
@@ -237,6 +280,29 @@ class GnIESScore(DecomposableScore):
         return B, Omegas, Means
 
     def _mle_local(self, j, pa):
+        """Given a variable and its parents, computes the MLE of the
+        regression coefficients and noise-term variances and means.
+
+        Parameters
+        ----------
+        j : int
+            The index of the node.
+        pa : set of ints
+            The parents of the variable
+
+        Returns
+        -------
+        b : np.array
+            The MLE of the regression coefficients, with length as
+            many elements in `pa`.
+        omegas : np.array
+            The MLE of the noise-term variances, in an array with
+            length the number of environments `self.e`.
+        means : np.array or NoneType
+            The MLE of the noise-term means, in an array with length
+            the number of environments `self.e`. Is `None` if
+            `self.centered` is True.
+        """
         pa = sorted(pa)
         b, omegas = self._alternating_mle(j, pa, debug=0)
         means = None if self.centered else self._noise_means_from_b(j, pa, b)
@@ -244,8 +310,25 @@ class GnIESScore(DecomposableScore):
         return b, omegas, means
 
     def _omegas_from_b(self, j, pa, b):
-        """Given the regression coefficients for the jth variable, compute the
-        variance of its noise terms.
+        """Given its parents and corresponding regression coefficients,
+        estimate the noise-term variances of the given variable.
+
+        Parameters
+        ----------
+        j : int
+            The index of the node.
+        pa : list of ints
+            The parents of the variable
+        b : np.array
+            The regression coefficients, with length as many elements
+            in `pa`.
+
+        Returns
+        -------
+        omegas : np.array
+            The estimate of noise-term variances of the variable, in
+            an array of length `self.e`.
+
         """
         # variable j has not received interventions: its noise-term
         # variance is constant across environments
@@ -268,8 +351,26 @@ class GnIESScore(DecomposableScore):
         return omegas
 
     def _noise_means_from_b(self, j, pa, b):
-        """Given the regression coefficients for a variable, return the
-        noise-term mean estimates"""
+        """Given its parents and corresponding regression coefficients,
+        estimate the noise-term means of the given variable.
+
+        Parameters
+        ----------
+        j : int
+            The index of the node.
+        pa : list of ints
+            The parents of the variable
+        b : np.array
+            The regression coefficients, with length as many elements
+            in `pa`.
+
+        Returns
+        -------
+        means : np.array
+            The estimate of noise-term means of the variable, in
+            an array of length `self.e`.
+
+        """
         if j not in self.I:
             mean = self._pooled_means[j] - self._pooled_means[pa] @ b
             means = np.ones(self.e, dtype=float) * mean
@@ -278,10 +379,25 @@ class GnIESScore(DecomposableScore):
         return means
 
     def _b_from_omegas(self, j, pa, omegas):
-        """Regress j on its parents from the weighted covariance matrix,
-        where the covariance matrix from each environment is weighted by
-        the number of observation and the noise-term variance of j for
-        that environment.
+        """Given its noise-term variances across environments and parents,
+        estimate the regression coefficients for the given variable.
+
+        Parameters
+        ----------
+        j : int
+            The index of the node.
+        pa : list of ints
+            The parents of the variable
+        omegas : np.array
+            The noise-term variances of the variable, in an array of
+            length `self.e`.
+
+        Returns
+        -------
+        b : np.array
+            The estimate of the regression coefficients, with length as
+            many elements in `pa`.
+
         """
         if j not in self.I:
             weighted_covariance = self._pooled_covariance
@@ -291,8 +407,28 @@ class GnIESScore(DecomposableScore):
             weighted_covariance = np.sum(self._sample_covariances * np.reshape(weights, (self.e, 1, 1)), axis=0)
         return _regress(j, pa, weighted_covariance)
 
-    def _alternating_mle(self, j, pa, assume_convex=False, debug=0):
-        """
+    def _alternating_mle(self, j, pa, debug=False):
+        """The alternating optimization procedure used to estimate the
+        regression coefficients and noise term variances of a variable
+        given its parents.
+
+        Parameters
+        ----------
+        j : int
+            The index of the node.
+        pa : list of ints
+            The parents of the variable
+        debug : bool, default=False
+            If debugging traces should be printed.
+
+        Returns
+        -------
+        b : np.array
+            The MLE of the regression coefficients, with length as
+            many elements in `pa`.
+        omegas : np.array
+            The MLE of the noise-term variances, in an array with
+            length the number of environments `self.e`.
         """
         # If j has no parents no alternating is needed
         if len(pa) == 0:
@@ -303,7 +439,6 @@ class GnIESScore(DecomposableScore):
             # Set starting point for optimization procedure
             prev_b = b = _regress(j, pa, self._pooled_covariance)
             prev_omegas = omegas = self._omegas_from_b(j, pa, b)
-            prev_delta = np.inf
             # Start alternating optimization
             for i in range(self.max_iter):
                 omegas = self._omegas_from_b(j, pa, b)
@@ -315,17 +450,9 @@ class GnIESScore(DecomposableScore):
                 if delta <= self.tol:
                     print() if debug else None
                     return b, omegas
-                elif assume_convex and delta > prev_delta:
-                    # if program is convex, an increase in the distance
-                    # between iterations is due to numerical issues. Thus we
-                    # return the results from the previous iteration as we
-                    # assume that's as close as we can get
-                    print() if debug else None
-                    return prev_b, prev_omegas
                 else:
                     prev_omegas = omegas
                     prev_b = b
-                    prev_delta = delta
             print(" MAX ITER REACHED") if debug else None
             return b, omegas
 
@@ -353,8 +480,8 @@ class GnIESScore(DecomposableScore):
 
     def _ddof_local(self, j, pa):
         """Compute the number of free parameters that are estimated for a
-        variable in the model, given its parents and the intervention
-        targets.
+        single variable in the model, given its parents and the
+        intervention targets.
 
         Parameters
         ----------
