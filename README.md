@@ -10,15 +10,25 @@ You can clone this repo or install the python package via pip:
 pip install gnies
 ```
 
-## Running the algorithm
+## Running the algorithm with `gnies.fit`
 
-### Using the greedy approach for the outer procedure
-
-Lorem Ipsum.
+GnIES can be run through the function `gnies.fit`. We offer the two approaches for selection of variables in the outer procedure of the algorithm; they can be set with the parameter `approach`, or directly through the functions `gnies.fit_greedy` and `gnies.fit_rank` in the `[gnies.main](gnies/main.py)` module. With `approach='greedy'` the greedy approach is selected, which corresponds to the results from figures 1,2 and 3 in the paper; the approach consists in greedily adding variables to the intervention targets estimate. With `approach='rank'`, the faster ranking procedure is run, at a small cost in the accuracy of the estimates (see figure <TODO: figure> in the paper).
 
 ```python
-ges.fit_bic(data, A0 = None, phases = ['forward', 'backward', 'turning'], debug = 0)
-```
+def fit(
+    data,
+    lmbda=None,
+    approach="greedy",
+    # Parameters used for greedy approach
+    I0=set(),
+    phases=["forward", "backward"],
+    # Parameters used for rank approach
+    direction="forward",
+    # Parameters used by inner-procedure (modified GES)
+    ges_iterate=True,
+    ges_phases=["forward", "backward", "turning"],
+    debug=0
+)
 
 **Parameters**
 
@@ -32,7 +42,7 @@ ges.fit_bic(data, A0 = None, phases = ['forward', 'backward', 'turning'], debug 
 - **estimate** (np.array): the adjacency matrix of the estimated CPDAG.
 - **total_score** (float): the score of the estimate.
 
-**Example**
+**Example using the greedy approach**
 
 Here [sempler](https://github.com/juangamella/sempler) is used to generate interventional data from a Gaussian SCM, but is not a dependency of the package.
 
@@ -69,9 +79,7 @@ print(icpdag, I)
 #  [0 0 0 0 0 0 0 0 0 0]] {1, 2, 3}
 ```
 
-### Using the faster ranking approach
-
-**Example**
+**Example using the faster ranking approach**
 
 ```python
 import sempler, sempler.generators
