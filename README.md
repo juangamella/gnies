@@ -98,11 +98,11 @@ print(icpdag, I)
 
 The source code modules can be found inside the `gnies/` directory. These include:
 
-  - `gnies.main` which is the main module with the calls to start GnIES.
-  - `gnies.utils` contains auxiliary functions and the modified completion algorithm to transform PDAGs into a I-CPDAG, in the function `pdag_to_icpdag`.
+  - [`gnies.main`](gnies/main.py) which is the main module with the calls to start GnIES.
+  - [`gnies.utils`](gnies/utils.py) contains auxiliary functions and the modified completion algorithm to transform PDAGs into a I-CPDAG, in the function `pdag_to_icpdag`.
   - `scores/` contains the modules with the score classes:
-      - `ges.scores.decomposable_score` contains the base class for decomposable score classes (see that module for more details).
-      - `ges.scores.gnies_score` contains an implementation of the cached GnIES score, as described in section 4 of the paper.
+      - [`ges.scores.decomposable_score`](gnies/scores/decomposable_score.py) contains the base class for decomposable score classes (see that module for more details).
+      - [`ges.scores.gnies_score`](gnies/scores/gnies_score.py) contains an implementation of the cached GnIES score, as described in section 4 of the paper.
    - `test/` contains the unit tests of the scores and other components.
 
 ## Tests
