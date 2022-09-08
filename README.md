@@ -2,7 +2,7 @@
 
 This is a python implementation of the GnIES algorithm from the paper [*"<TODO: Title>"*](<TODO: arxiv link>) by Juan L. Gamella, Armeen Taeb, Christina Heinze-Deml and Peter Bühlmann.
 
-## Installation
+### Installation
 
 You can clone this repo or install the python package via pip:
 
@@ -10,9 +10,9 @@ You can clone this repo or install the python package via pip:
 pip install gnies
 ```
 
-## Running the algorithm with `gnies.fit`
+## Running the algorithm
 
-GnIES can be run through the function `gnies.fit`. We offer the two approaches for selection of variables in the outer procedure of the algorithm; they can be set with the parameter `approach`, or directly through the functions `gnies.fit_greedy` and `gnies.fit_rank` in the `[gnies.main](gnies/main.py)` module. With `approach='greedy'` the greedy approach is selected, which corresponds to the results from figures 1,2 and 3 in the paper; the approach consists in greedily adding variables to the intervention targets estimate. With `approach='rank'`, the faster ranking procedure is run, at a small cost in the accuracy of the estimates (see figure <TODO: figure> in the paper).
+GnIES can be run through the function `gnies.fit`.
 
 ```python
 def fit(
@@ -29,6 +29,7 @@ def fit(
     ges_phases=["forward", "backward", "turning"],
     debug=0
 )
+```
 
 **Parameters**
 
@@ -41,6 +42,8 @@ def fit(
 **Returns**
 - **estimate** (np.array): the adjacency matrix of the estimated CPDAG.
 - **total_score** (float): the score of the estimate.
+
+We offer the two approaches for selection of variables in the outer procedure of the algorithm; they can be set with the parameter `approach`, or directly through the functions `gnies.fit_greedy` and `gnies.fit_rank` in the `[gnies.main](gnies/main.py)` module. With `approach='greedy'` the greedy approach is selected, which corresponds to the results from figures 1,2 and 3 in the paper; the approach consists in greedily adding variables to the intervention targets estimate. With `approach='rank'`, the faster ranking procedure is run, at a small cost in the accuracy of the estimates (see figure <TODO: figure> in the paper).
 
 **Example using the greedy approach**
 
