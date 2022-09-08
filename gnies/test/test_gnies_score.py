@@ -40,6 +40,7 @@ import time
 import os
 
 import gnies.scores.gnies_score as gnies_score
+from gnies.scores.interventional import FixedInterventionalScore
 from gnies.scores.gnies_score import GnIESScore
 
 # ---------------------------------------------------------------------
@@ -50,7 +51,8 @@ NUM_GRAPHS = 2
 
 
 class ImplementationChangeTests(unittest.TestCase):
-    """Test whether the actual values computed by the score change"""
+    """Compare the newer, faster implementation in GnIESScore with the
+    older one in FixedInterventionalScore"""
 
     datasets_file = 'datasets.npy'
     graphs_file = 'graphs.npy'
@@ -120,7 +122,7 @@ class ImplementationChangeTests(unittest.TestCase):
                 print('Saved targets to "%s"' % self.targets_file)
 
             # Compute and save scores
-            full_scores, local_scores, _ = score_graphs(GnIESScore, graphs_to_score, targets_to_score, datasets)
+            full_scores, local_scores, _ = score_graphs(FixedInterventionalScore, graphs_to_score, targets_to_score, datasets)
             with open(self.full_scores_file, 'wb') as f:
                 np.save(f, full_scores)
                 print('Saved full_scores to "%s"' % self.full_scores_file)
