@@ -36,7 +36,14 @@ def fit(
 **Parameters**
 
 - **data** (list of numpy.ndarray): A list with the samples from the different environments, where each sample is an array with columns corresponding to variables and rows to observations.
-- **lmbda** (float, default=None) The penalization parameter for the penalized-likelihood score. If `None`, the BIC penalization is chosen, that is, `0.5 * log(N)` where `N` is the total number of observations, pooled across environments.
+- **lmbda** (float, default=None): The penalization parameter for the penalized-likelihood score. If `None`, the BIC penalization is chosen, that is, `0.5 * log(N)` where `N` is the total number of observations, pooled across environments.
+- **approach** ({'greedy', 'rank'}, default='greedy'): The approach used by the outer procedure of GnIES. 'greedy' means that intervention targets are greedily added/removed; 'rank' means that an ordering is found by first fitting a model with `I={1,...,p}`, and targets are added/removed in this order.
+- **I0** (set, default=set()): If the 'greedy' approach is selected, specifies the initial set of intervention targets, to which targets are added/removed.
+- **phases** ([{'forward', 'backward'}*], default=['forward', 'backward']): If the 'greedy' approach is selected, specifies which phases of the outer procedure are run.
+- **direction** ({'forward', 'backward'}, default='forward'): If the 'rank' approach is selected, specifies whether we add or remove variables** (if 'forward', we start with an empty intervention set and add targets according to the found ordering; if 'backward', we start with the full set and remove targets instead.
+- **ges_iterate** (bool, default=False): Indicates whether the phases of the inner procedure (modified GES) should be iterated more than once.
+- **ges_phases** ([{'forward', 'backward', 'turning'}*], optional): Which phases of the inner procedure (modified GES) are run, and in which order. Defaults to `['forward', 'backward', 'turning']`.
+- **debug** (int, default=0): If larger than 0, debug are traces printed. Higher values correspond to increased verbosity.
 
 **Returns**
 
