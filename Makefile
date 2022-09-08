@@ -43,9 +43,10 @@ endif
 
 # Run the example scripts in the README
 examples:
-	PYTHONPATH=./ python3 docs/gnies_example.py	
 	PYTHONPATH=./ python3 docs/gnies_example_rank.py
 	PYTHONPATH=./ python3 docs/gnies_example_greedy.py
+
+
 
 # Run the doctests
 doctests:

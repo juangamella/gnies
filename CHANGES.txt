@@ -1,5 +1,6 @@
 v0.3.0, 2022-??-??
 -- Changes function signatures of fit functions in main, hence the minor version jump.
+-- Heavily optimized the GnIES score implementation.
 -- Added docstrings to main module
 v0.2.0, 2022-07-18
 -- Can pass parameter 'max_combinations' to gnies.utils.all_dags to return an error if the max. number of possible DAGs is too large
