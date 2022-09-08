@@ -109,7 +109,7 @@ The source code modules can be found inside the `gnies/` directory. These includ
 
 All components come with unit tests to match, and some property-based tests. Of course, this doesn't mean there are no bugs, but hopefully it means *they are less likely* :)
 
-The tests can be run with `make test`. You can add `SUITE=<module_name>` to run a particular module only. There are, however, additional dependencies to run the tests. You can find these in [`requirements_tests.txt`](requirements_tests.txt).
+The tests can be run with `make test`. You can add `SUITE=<module_name>` to run a particular module only. There is, however, the additional dependency of the [`sempler`](https://github.com/juangamella/sempler) package to run the tests. You can find the details in [`requirements_tests.txt`](requirements_tests.txt).
 
 ## Feedback
 
