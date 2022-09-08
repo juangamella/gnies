@@ -34,37 +34,77 @@ ges.fit_bic(data, A0 = None, phases = ['forward', 'backward', 'turning'], debug 
 
 **Example**
 
-Here [sempler](https://github.com/juangamella/sempler) is used to generate an observational sample from a Gaussian SCM, but this is not a dependency.
+Here [sempler](https://github.com/juangamella/sempler) is used to generate interventional data from a Gaussian SCM, but is not a dependency of the package.
 
 ```python
-import ges
-import sempler
-import numpy as np
+import sempler, sempler.generators
+import gnies
 
-# Generate observational data from a Gaussian SCM using sempler
-A = np.array([[0, 0, 1, 0, 0],
-              [0, 0, 1, 0, 0],
-              [0, 0, 0, 1, 1],
-              [0, 0, 0, 0, 1],
-              [0, 0, 0, 0, 0]])
-W = A * np.random.uniform(1, 2, A.shape) # sample weights
-data = sempler.LGANM(W,(1,2), (1,2)).sample(n=5000)
+# Generate a random SCM using sempler
+W = sempler.generators.dag_avg_deg(10, 2.1, 0.5, 1, random_state=42)
+scm = sempler.LGANM(W, (0, 0), (1, 2), random_state=42)
 
-# Run GES with the Gaussian BIC score
-estimate, score = ges.fit_bic(data)
+# Generate interventional data
+n = 1000
+data = [
+    scm.sample(n, random_state=42),
+    scm.sample(n, noise_interventions={1: (0, 11)}, random_state=42),
+    scm.sample(n, noise_interventions={2: (0, 12), 3: (0, 13)}, random_state=42),
+]
 
-print(estimate, score)
+# Run GnIES
+_score, icpdag, I = gnies.fit_greedy(data)
+print(icpdag, I)
 
-# Output
-# [[0 0 1 0 0]
-#  [0 0 1 0 0]
-#  [0 0 0 1 1]
-#  [0 0 0 0 1]
-#  [0 0 0 1 0]] 21511.315220683457
+# Output:
+# [[0 1 0 0 0 1 0 0 0 0]
+#  [0 0 0 0 0 0 0 0 0 0]
+#  [0 0 0 0 0 0 0 0 0 0]
+#  [0 1 0 0 0 0 0 0 0 0]
+#  [0 1 0 0 0 0 1 0 0 1]
+#  [1 0 1 0 0 0 0 0 0 0]
+#  [0 1 1 0 0 0 0 0 0 0]
+#  [0 0 0 0 0 0 1 0 0 1]
+#  [0 1 0 1 0 0 1 0 0 0]
+#  [0 0 0 0 0 0 0 0 0 0]] {1, 2, 3}
 ```
 
 ### Using the faster ranking approach
 
+**Example**
+
+```python
+import sempler, sempler.generators
+import gnies
+
+# Generate a random SCM using sempler
+W = sempler.generators.dag_avg_deg(10, 2.1, 0.5, 1, random_state=42)
+scm = sempler.LGANM(W, (0, 0), (1, 2), random_state=42)
+
+# Generate interventional data
+n = 1000
+data = [
+    scm.sample(n, random_state=42),
+    scm.sample(n, noise_interventions={1: (0, 11)}, random_state=42),
+    scm.sample(n, noise_interventions={2: (0, 12), 3: (0, 13)}, random_state=42),
+]
+
+# Run GnIES
+_score, icpdag, I = gnies.fit(data, approach='rank')
+print(icpdag, I)
+
+# Output:
+# [[0 1 0 0 0 1 0 0 0 0]
+#  [0 0 0 0 0 0 0 0 0 0]
+#  [0 0 0 0 0 0 0 0 0 0]
+#  [0 1 0 0 0 0 0 0 0 0]
+#  [0 1 0 0 0 0 1 0 0 1]
+#  [1 0 1 0 0 0 0 0 0 0]
+#  [0 1 1 0 0 0 0 0 0 0]
+#  [0 0 0 0 0 0 1 0 0 1]
+#  [0 1 0 1 0 0 1 0 0 0]
+#  [0 0 0 0 0 0 0 0 0 0]] {1, 2, 3}
+```
 
 ## Code Structure
 
