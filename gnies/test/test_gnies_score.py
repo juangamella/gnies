@@ -677,7 +677,7 @@ class ScoreTests(unittest.TestCase):
         # ----------------------------------------
         # Test
         for centered in [True, False]:
-            random_targets = sempler.generators.intervention_targets(self.p, self.e, (0, self.p))
+            random_targets = sempler.generators.intervention_targets(self.p, self.e, (0, self.p), random_state=42)
             I = set.union(*[set(i) for i in random_targets])
             score = GnIESScore(self.int_data, I, lmbda=0, centered=centered)
             for k, A in enumerate(graphs):
