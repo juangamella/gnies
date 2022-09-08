@@ -74,7 +74,7 @@ print(icpdag, I)
 #  [0 0 0 0 0 0 0 0 0 0]] {1, 2, 3}
 ```
 
-### Example using the faster ranking approach**
+### Example using the faster ranking approach
 
 ```python
 # Run GnIES (on the same data as above)
