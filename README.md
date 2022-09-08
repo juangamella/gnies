@@ -35,15 +35,66 @@ def fit(
 
 **Parameters**
 
-- **data** (np.array): the matrix containing the observations of each variable (each column corresponds to a variable).
-- **A0** (np.array, optional): the initial CPDAG on which GES will run, where where `A0[i,j] != 0` implies `i -> j` and `A[i,j] != 0 & A[j,i] != 0` implies `i - j`. Defaults to the empty graph.
-- **phases** (`[{'forward', 'backward', 'turning'}*]`, optional): this controls which phases of the GES procedure are run, and in which order. Defaults to `['forward', 'backward', 'turning']`. The turning phase was found by [Hauser & Bühlmann (2012)](https://www.jmlr.org/papers/volume13/hauser12a/hauser12a.pdf) to improve estimation performace, and is implemented here too.
-- **iterate** (boolean, default=False): Indicates whether the algorithm should repeat the given phases more than once, until the score is not improved.
-- **debug** (int, optional): if larger than 0, debug are traces printed. Higher values correspond to increased verbosity.
+```python
+    Parameters
+    ----------
+    data : list of numpy.ndarray
+        A list with the samples from the different environments, where
+        each sample is an array with columns corresponding to
+        variables and rows to observations.
+    lmbda : float, default=None
+        The penalization parameter for the penalized-likelihood
+        score. If `None`, the BIC penalization is chosen, that is,
+        `0.5 * log(N)` where `N` is the total number of observations,
+        pooled across environments.
+    approach : {'greedy', 'rank'}, default='greedy'
+        The approach used by the outer procedure of GnIES. 'greedy'
+        means that intervention targets are greedily added/removed;
+        'rank' means that an ordering is found by first fitting a
+        model with `I={1,...,p}`, and targets are added/removed in
+        this order.
+    I0 : set, default=set()
+        If the 'greedy' approach is selected, specifies the initial
+        set of intervention targets, to which targets are
+        added/removed.
+    phases : [{'forward', 'backward'}*], default=['forward', 'backward']
+        If the 'greedy' approach is selected, specifies which phases
+        of the outer procedure are run.
+    direction : {'forward', 'backward'}, default='forward'
+        If the 'rank' approach is selected, specifies whether we add or
+        remove variables: if 'forward', we start with an empty
+        intervention set and add targets according to the found
+        ordering; if 'backward', we start with the full set and remove
+        targets instead.
+    ges_iterate : bool, default=False
+        Indicates whether the phases of the inner procedure (modified
+        GES) should be iterated more than once.
+    ges_phases : [{'forward', 'backward', 'turning'}*], optional
+        Which phases of the inner procedure (modified GES) are run,
+        and in which order. Defaults to `['forward', 'backward',
+        'turning']`.
+    debug : int, default=0
+        If larger than 0, debug are traces printed. Higher values
+        correspond to increased verbosity.
 
-**Returns**
-- **estimate** (np.array): the adjacency matrix of the estimated CPDAG.
-- **total_score** (float): the score of the estimate.
+    Returns
+    -------
+    score : float
+        The penalized likelihood score of the GnIES estimate.
+    icpdag : numpy.ndarray
+        The I-CPDAG representing the estimated I-equivalence class,
+        where `icpdag[i,j] != 0` implies the edge `i -> j` and
+        `icpdag[i,j] != 0 & icpdag[j,i] != 0` implies the edge `i -
+        j`.
+    I : set of ints
+        The estimate of the intervention targets.
+
+    Raises
+    ------
+    ValueError:
+        If an invalid value is selected for the `approach` parameter.
+```
+    
 
 We offer the two approaches for selection of variables in the outer procedure of the algorithm; they can be set with the parameter `approach`, or directly through the functions [`gnies.fit_greedy`](<TODO:link>) and [`gnies.fit_rank`](<TODO:link>) in the [`gnies.main`](gnies/main.py) module. With `approach='greedy'` the greedy approach is selected, which corresponds to the results from figures 1,2 and 3 in the paper; the approach consists in greedily adding variables to the intervention targets estimate. With `approach='rank'`, the faster ranking procedure is run, at a small cost in the accuracy of the estimates (see figure <TODO: figure> in the paper).
 
