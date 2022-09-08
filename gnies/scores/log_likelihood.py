@@ -106,14 +106,7 @@ def local(j, b, omegas, sample_covariances, n_obs):
         the resulting log_likelihood
 
     """
-    likelihood = 0
-    I = np.zeros_like(b)
-    I[j] = 1
-    for e, sigma in enumerate(sample_covariances):
-        K = 1 / omegas[e]
-        likelihood += n_obs[e] * (np.log(K) - K * (I - b) @ sigma @ (I - b))
-    return likelihood * 0.5
-
+    return -0.5 * ((1 + np.log(omegas)) * n_obs).sum()
 
 def full_raw(B, omegas, data):
     """

@@ -28,11 +28,10 @@
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from gnies.scores import FixedInterventionalScore
+from gnies.scores import GnIESScore as Score
 import gnies.utils as utils
 import ges
 import numpy as np
-
 
 # --------------------------------------------------------------------
 # Public API
@@ -124,7 +123,7 @@ def fit(
 
 def fit_greedy(
     data,
-    lmbda,
+    lmbda=None,
     I0=set(),
     phases=["forward", "backward"],
     ges_iterate=True,
@@ -177,16 +176,14 @@ def fit_greedy(
     print("Running GnIES with greedy phases %s" % phases) if debug else None
     # Inner procedure parameters
     params = {
-        "lmbda": lmbda,
         "phases": ges_phases,
         "iterate": ges_iterate,
-        "centered": True,
-        "covariances": None,
         "debug": 2 if debug > 1 else 0,
     }
 
     # Iteration 0: initial set
-    current_estimate, current_score, score_class = _inner_procedure(data, I0, **params)
+    score_class = Score(data, I0, lmbda=lmbda)
+    current_estimate, current_score = _inner_procedure(score_class, I0, **params)
 
     # Iterate
     p = score_class.p
@@ -194,7 +191,7 @@ def fit_greedy(
     full_I = set(range(p))
     phase = "forward"
     for phase in phases:
-        print("  GnIES %s phase" % phase)
+        print("  GnIES %s phase" % phase) if debug else None
         while True:
             print("    Current I=%s (score = %0.2f)" % (current_I, current_score)) if debug else None
             scores = []
@@ -204,7 +201,8 @@ def fit_greedy(
                 break
             for i in next_Is:
                 new_I = current_I | {i} if phase == "forward" else current_I - {i}
-                estimate, score, _ = _inner_procedure(data, new_I, **params)
+                score_class.set_I(new_I)
+                estimate, score = _inner_procedure(score_class, new_I, **params)
                 print("      Scored I=%s : %0.2f" % (new_I, score)) if debug else None
                 scores.append((score, new_I, estimate))
             # Pick the maximally scoring addition/removal
@@ -277,11 +275,8 @@ def fit_rank(
 
     # Inner procedure parameters
     params = {
-        "lmbda": lmbda,
         "phases": ges_phases,
         "iterate": ges_iterate,
-        "centered": True,
-        "covariances": None,
         "debug": 2 if debug > 1 else 0,
     }
 
@@ -290,15 +285,17 @@ def fit_rank(
     p = data[0].shape[1]
     e = len(data)
     full_I = set(range(p))
-    current_estimate, current_score, score_class = _inner_procedure(data, full_I, **params)
+    score_class = Score(data, full_I, lmbda=lmbda)
+    current_estimate, current_score = _inner_procedure(score_class, full_I, **params)
     assert utils.is_dag(current_estimate)
-    _, omegas = score_class._mle_full(current_estimate, [full_I] * e)
+    _, omegas = score_class._mle_full(current_estimate)
     variances = np.var(omegas, axis=0)
     order = list(np.argsort(variances))
     # Setup for the greedy outer procedure
     if direction == "forward":
         current_I = set()
-        current_estimate, current_score, _ = _inner_procedure(data, current_I, **params)
+        score_class = Score(data, set(), lmbda=lmbda)
+        current_estimate, current_score = _inner_procedure(score_class, current_I, **params)
         verb = "Adding"
         order.reverse()
     elif direction == "backward":
@@ -313,7 +310,8 @@ def fit_rank(
     for i in order:
         print("    Current I=%s (score = %0.2f)" % (current_I, current_score)) if debug else None
         next_I = current_I | {i} if direction == "forward" else current_I - {i}
-        next_estimate, next_score, _ = _inner_procedure(data, next_I, **params)
+        score_class.set_I(next_I)
+        next_estimate, next_score = _inner_procedure(score_class, next_I, **params)
         if next_score >= current_score:
             current_score, current_estimate, current_I = (next_score, next_estimate, next_I)
         else:
@@ -327,13 +325,14 @@ def fit_rank(
 
 
 def _inner_procedure(
-    data,
+    score_class,
     I,
     lmbda=None,
     phases=["forward", "backward", "turning"],
     iterate=True,
     centered=True,
     covariances=None,
+    previous_score=None,
     debug=0,
 ):
     """Run the inner procedure of GnIES, i.e. GES with a modified score
@@ -376,10 +375,8 @@ def _inner_procedure(
     -------
 
     """
-    # Construct score class and completion algorithm
-    score_class = FixedInterventionalScore(data, I, centered=centered, lmbda=lmbda)
-    if covariances is not None:
-        score_class._sample_covariances = covariances
+    # Construct completion algorithm
+    assert score_class.I == I
 
     def completion_algorithm(PDAG):
         return utils.pdag_to_icpdag(PDAG, I)
@@ -387,4 +384,4 @@ def _inner_procedure(
     # Run inner procedure
     estimate, score = ges.fit(score_class, completion_algorithm, phases=phases, iterate=iterate, debug=debug)
 
-    return estimate, score, score_class
+    return estimate, score

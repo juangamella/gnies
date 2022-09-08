@@ -57,10 +57,11 @@ class ScoreTests(unittest.TestCase):
                        [0, 0, 0, 0, 1],
                        [0, 0, 0, 0, 0]])
     factorization = [(4, (2, 3)), (3, (2,)), (2, (0, 1)), (0, ()), (1, ())]
-    true_B = true_A * np.random.uniform(1, 2, size=true_A.shape)
-    scm = sempler.LGANM(true_B, (0, 0), (0.3, 0.4))
+    rng = np.random.default_rng(42)
+    true_B = true_A * rng.uniform(1, 2, size=true_A.shape)
+    scm = sempler.LGANM(true_B, (0, 0), (0.3, 0.4), random_state=42)
     p = len(true_A)
-    n = np.random.randint(100, 10000)
+    n = 10000
     true_targets = [set(), {0}, {1}, {2}, {3}, {4}]
     interventions = [{0: (1.1, 1.0)},
                      {1: (2.2, 1.1)},
@@ -76,7 +77,7 @@ class ScoreTests(unittest.TestCase):
     interventional_variances = np.tile(scm.variances, (len(interventions) + 1, 1))
     interventional_means = np.tile(scm.means, (len(interventions) + 1, 1))
     for i, intervention in enumerate(interventions):
-        int_data.append(scm.sample(n=n, shift_interventions=intervention))
+        int_data.append(scm.sample(n=n, shift_interventions=intervention, random_state=42))
         for (target, params) in intervention.items():
             interventional_variances[i + 1, target] += params[1]
             interventional_means[i + 1, target] += params[0]
@@ -121,7 +122,7 @@ class ScoreTests(unittest.TestCase):
         p = 10
         e = 5
         for i in range(G):
-            A = sempler.generators.dag_avg_deg(p, 3, 1, 1)
+            A = sempler.generators.dag_avg_deg(p, 3, 1, 1, random_state=i)
             int_sizes = np.random.choice(range(1, p + 1), e)
             I = [set(np.random.choice(range(p), size)) for size in int_sizes]
             # Without intercept
@@ -146,13 +147,13 @@ class ScoreTests(unittest.TestCase):
         K = 5
         # Generate random graphs
         graphs = [self.true_A]
-        graphs += [sempler.generators.dag_avg_deg(self.p, k) for _ in range(G)]
+        graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
         # Generate random intervention targets
         interventions = [self.true_targets]
         for _ in range(K):
             random_interventions = sempler.generators.intervention_targets(self.p,
                                                                            self.e,
-                                                                           (0, self.p))
+                                                                           (0, self.p), random_state=42)
             interventions.append([set(I) for I in random_interventions])
         # ----------------------------------------
         # Test that score is the same when computed locally or for
@@ -183,11 +184,11 @@ class ScoreTests(unittest.TestCase):
         K = 5
         # Generate random graphs
         graphs = [self.true_A]
-        graphs += [sempler.generators.dag_avg_deg(self.p, k) for _ in range(G)]
+        graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
         # Generate random intervention targets
         random_interventions = sempler.generators.intervention_targets(self.p,
                                                                        K,
-                                                                       (0, self.p))
+                                                                       (0, self.p), random_state=42)
         interventions = [set.union(*self.true_targets)] + [set(I) for I in random_interventions]
         # ----------------------------------------
         # Test that score is the same when computed locally or for
@@ -270,13 +271,13 @@ class ScoreTests(unittest.TestCase):
         K = 5
         # Generate random graphs
         graphs = [self.true_A]
-        graphs += [sempler.generators.dag_avg_deg(self.p, k) for _ in range(G)]
+        graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
         # Generate random intervention targets
         interventions = [self.true_targets]
         for _ in range(K):
             random_interventions = sempler.generators.intervention_targets(self.p,
                                                                            self.e,
-                                                                           (0, self.p))
+                                                                           (0, self.p), random_state=42)
             interventions.append([set(I) for I in random_interventions])
 
         # ----------------------------------------
@@ -330,13 +331,13 @@ class ScoreTests(unittest.TestCase):
         K = 5
         # Generate random graphs
         graphs = [self.true_A]
-        graphs += [sempler.generators.dag_avg_deg(self.p, k) for _ in range(G)]
+        graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
         # Generate random intervention targets
         interventions = [self.true_targets]
         for _ in range(K):
             random_interventions = sempler.generators.intervention_targets(self.p,
                                                                            self.e,
-                                                                           (1, self.p))
+                                                                           (1, self.p), random_state=42)
             interventions.append([set(I) for I in random_interventions])
 
         # ----------------------------------------
@@ -400,11 +401,11 @@ class ScoreTests(unittest.TestCase):
         K = 5
         # Generate random graphs
         graphs = [self.true_A]
-        graphs += [sempler.generators.dag_avg_deg(self.p, k) for _ in range(G)]
+        graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
         # Generate random intervention targets
         random_interventions = sempler.generators.intervention_targets(self.p,
                                                                        K,
-                                                                       (0, self.p))
+                                                                       (0, self.p), random_state=42)
         interventions = [set.union(*self.true_targets)] + [set(I) for I in random_interventions]
         # ----------------------------------------
         # Test that score is the same when computed locally or for
@@ -436,11 +437,11 @@ class ScoreTests(unittest.TestCase):
         K = 5
         # Generate random graphs
         graphs = [self.true_A]
-        graphs += [sempler.generators.dag_avg_deg(self.p, k) for _ in range(G)]
+        graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
         # Generate random intervention targets
         targets = []
         for _ in range(K):
-            targets.append(set(sempler.generators.intervention_targets(self.p, 1, (0, self.p))[0]))
+            targets.append(set(sempler.generators.intervention_targets(self.p, 1, (0, self.p), random_state=42)[0]))
 
         # ----------------------------------------
         # Test behaviour of MLE
@@ -472,7 +473,7 @@ class ScoreTests(unittest.TestCase):
         k = 2.1
         # Generate random graphs
         graphs = [self.true_A]
-        graphs += [sempler.generators.dag_avg_deg(self.p, k) for _ in range(G)]
+        graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
         # ----------------------------------------
         # Test
         true_sample_means = np.array([np.mean(X, axis=0) for X in self.int_data])
@@ -497,7 +498,7 @@ class ScoreTests(unittest.TestCase):
         pooled_means = np.tile(sample_means.mean(axis=0), (self.e, 1))
         # Generate random graphs
         graphs = [self.true_A]
-        graphs += [sempler.generators.dag_avg_deg(self.p, k) for _ in range(G)]
+        graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
         # ----------------------------------------
         # Test
         score = InterventionalScore(self.int_data, fine_grained=True, centered=False)
@@ -518,7 +519,7 @@ class ScoreTests(unittest.TestCase):
         k = 2.1
         # Generate random graphs
         graphs = [self.true_A]
-        graphs += [sempler.generators.dag_avg_deg(self.p, k) for _ in range(G)]
+        graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
         # ----------------------------------------
         # Test
         true_sample_means = np.array([np.mean(X, axis=0) for X in self.int_data])
@@ -546,7 +547,7 @@ class ScoreTests(unittest.TestCase):
         k = 2.1
         # Generate random graphs
         graphs = [self.true_A]
-        graphs += [sempler.generators.dag_avg_deg(self.p, k) for _ in range(G)]
+        graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
         I = [set(range(self.p))] * self.e
         for lmbda in [0, None]:
             for A in graphs:
@@ -742,117 +743,3 @@ class FixedInterventionTests(unittest.TestCase):
                     scores_fine = [fine_score.local_score(x, pa, I) for (x, pa) in factorizations]
                     scores_fixed = [fixed_score.local_score(x, pa) for (x, pa) in factorizations]
                     self.assertTrue(scores_fixed == scores_fine)
-
-
-class ImplementationChangeTests(unittest.TestCase):
-    """Test whether the actual values computed by the score change"""
-
-    datasets_file = 'datasets.npy'
-    graphs_file = 'graphs.npy'
-    targets_file = 'targets.npy'
-    full_scores_file = 'full_scores.npy'
-    local_scores_file = 'local_scores.npy'
-
-    def setUp(self):
-
-        # Check if files have already been generated
-        files_exist = os.path.exists(self.datasets_file)
-        files_exist = files_exist and os.path.exists(self.graphs_file)
-        files_exist = files_exist and os.path.exists(self.targets_file)
-        files_exist = files_exist and os.path.exists(self.full_scores_file)
-        files_exist = files_exist and os.path.exists(self.local_scores_file)
-
-        if files_exist:
-            print("Datasets/graphs/scores were already generated")
-        if not files_exist:
-            print("Datasets/graphs/scores files did not exist; generating")
-            datasets = []
-            graphs_to_score = []
-            targets_to_score = []
-            n_datasets = 1
-            n_graphs = 10
-
-            # Generate datasets
-            n = 1000
-            p = 10
-            k = 2.3
-            envs = 4
-            for i in range(n_datasets):
-                W = sempler.generators.dag_avg_deg(p, k, 0.5, 1, random_state=i)
-                scm = sempler.LGANM(W, (0, 1), (1, 2), random_state=i)
-                all_targets = sempler.generators.intervention_targets(p, envs - 1, (1, 3), random_state=i)
-                data = [scm.sample(n)]
-                for targets in all_targets:
-                    interventions = dict(
-                        (t, (np.random.uniform(1, 2), np.random.uniform(1, 2))) for t in targets)
-                    sample = scm.sample(n, noise_interventions=interventions)
-                    data.append(sample)
-                data = np.array(data)
-                # Save dataset and add true graph and targets
-                datasets.append(data)
-                A = (W != 0).astype(int)
-                graphs_to_score.append(A)
-                union = set.union(*[set(t) for t in all_targets])
-                targets_to_score.append(union)
-
-            # Generate graphs
-            graphs_to_score += [sempler.generators.dag_avg_deg(p, k, 1, 1, random_state=j) for j in range(n_graphs)]
-
-            # Store datasets
-            datasets = np.array(datasets)
-            with open(self.datasets_file, 'wb') as f:
-                np.save(f, datasets)
-                print('Saved datasets to "%s"' % self.datasets_file)
-            # Store graphs
-            graphs_to_score = np.array(graphs_to_score)
-            with open(self.graphs_file, 'wb') as f:
-                np.save(f, graphs_to_score)
-                print('Saved graphs to "%s"' % self.graphs_file)
-            # Store targets
-            targets_to_score = np.array(targets_to_score)
-            with open(self.targets_file, 'wb') as f:
-                np.save(f, targets_to_score)
-                print('Saved targets to "%s"' % self.targets_file)
-
-            # Compute and save scores
-            full_scores, local_scores = score_graphs(self.graphs_file, self.targets_file, self.datasets_file)
-            with open(self.full_scores_file, 'wb') as f:
-                np.save(f, full_scores)
-                print('Saved full_scores to "%s"' % self.full_scores_file)
-            with open(self.local_scores_file, 'wb') as f:
-                np.save(f, local_scores)
-                print('Saved local_scores to "%s"' % self.local_scores_file)
-
-    def test_scores(self):
-        computed_full_scores, computed_local_scores = score_graphs(self.graphs_file, self.targets_file, self.datasets_file)
-        full_scores = np.load(self.full_scores_file)
-        local_scores = np.load(self.local_scores_file)
-        self.assertTrue((computed_full_scores == full_scores).all())
-        self.assertTrue((computed_local_scores == local_scores).all())
-
-
-def score_graphs(graphs_file, targets_file, datasets_file, debug=False):
-    # Load files
-    graphs = np.load(graphs_file)
-    targets = np.load(targets_file, allow_pickle=True)
-    datasets = np.load(datasets_file)
-    # Set up score arrays
-    p = graphs.shape[1]
-    full_scores = np.zeros((len(graphs), len(targets), len(datasets)), dtype=float)
-    local_scores = np.zeros((len(graphs), len(targets), len(datasets), p), dtype=float)
-    # Compute scores
-    for k, data in enumerate(datasets):
-        for j, I in enumerate(targets):
-            print("Computing scores for dataset %d and targets %s" % (k + 1, targets)) if debug else None
-            score = FixedInterventionalScore(data, I)
-            for i, A in enumerate(graphs):
-                print("  Graph", i+1) if debug else None
-                full_scores[i, j, k] = score.full_score(A)
-                print("   full score :", full_scores[i, j, k]) if debug else None
-                print("   local scores :") if debug else None
-                for h in range(p):
-                    pa = utils.pa(h, A)
-                    local_scores[i, j, k, h] = score.local_score(h, pa)
-                    print("    %d : " % h, local_scores[i, j, k, h]) if debug else None
-                print() if debug else None
-    return full_scores, local_scores

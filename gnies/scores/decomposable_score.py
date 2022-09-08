@@ -32,13 +32,6 @@
 classes which implement a locally decomposable score for directed
 acyclic graphs. By default, the class also caches the results of
 computing local scores.
-
-NOTE: It is not mandatory to inherit this class when developing custom
-scores to use with the GES implementation in the ges package. The only
-requirement is that the class defines:
-  1. the local_score function (see below),
-  2. an attribute "p" for the total number of variables.
-
 """
 
 import copy
@@ -59,7 +52,7 @@ class DecomposableScore():
     def local_score(self, x, pa):
         """
         Return the local score of a given node and a set of
-        parents. If self.cache=True, will use previously computed
+        parents. If self._cache is defined, will use previously computed
         score if possible.
 
         Parameters
@@ -108,3 +101,9 @@ class DecomposableScore():
 
         """
         return 0
+
+    def prune_cache(self, V):
+        """Remove all entries for local scores of variables in V from the
+        cache"""
+        new_cache = dict((((j,pa),s) for ((j,pa),s) in self._cache.items() if j not in V))
+        self._cache = new_cache
