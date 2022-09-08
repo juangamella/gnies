@@ -45,7 +45,7 @@ def fit(
 
 We offer the two approaches for selection of variables in the outer procedure of the algorithm; they can be set with the parameter `approach`, or directly through the functions [`gnies.fit_greedy`](<TODO:link>) and [`gnies.fit_rank`](<TODO:link>) in the [`gnies.main`](gnies/main.py) module. With `approach='greedy'` the greedy approach is selected, which corresponds to the results from figures 1,2 and 3 in the paper; the approach consists in greedily adding variables to the intervention targets estimate. With `approach='rank'`, the faster ranking procedure is run, at a small cost in the accuracy of the estimates (see figure <TODO: figure> in the paper).
 
-**Example using the greedy approach**
+### Example using the greedy approach
 
 Here [sempler](https://github.com/juangamella/sempler) is used to generate interventional data from a Gaussian SCM, but is not a dependency of the package.
 
@@ -82,7 +82,7 @@ print(icpdag, I)
 #  [0 0 0 0 0 0 0 0 0 0]] {1, 2, 3}
 ```
 
-**Example using the faster ranking approach**
+### Example using the faster ranking approach**
 
 ```python
 import sempler, sempler.generators
