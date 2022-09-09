@@ -87,10 +87,10 @@ class Assumption1Tests(unittest.TestCase):
     # Sample data
     data = []
     for I in interventions:
-        data.append(scm.sample(n, shift_interventions=I))
+        data.append(scm.sample(n, shift_interventions=I, random_state=42))
 
     # Set up score instance
-    gnies_score = Score(data, I, centered=False)
+    gnies_score = Score(data, true_targets_union, centered=False)
 
     data_generating_vars = locals()
     # Debug outputs
