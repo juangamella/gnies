@@ -61,7 +61,7 @@ data = [
 ]
 
 # Run GnIES
-_score, icpdag, I = gnies.fit_greedy(data)
+_score, icpdag, I = gnies.fit(data)
 print(icpdag, I)
 
 # Output:
