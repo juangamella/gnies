@@ -35,9 +35,9 @@ def fit(
 
 A detailed documentation can be found in the function's [docstring](https://github.com/juangamella/gnies/blob/develop/gnies/main.py#L40). The most important parameters are:
 
-- **data** (list of numpy.ndarray): A list with the samples from the different environments, where each sample is an array with columns corresponding to variables and rows to observations.
-- **lmbda** (float, default=None): The penalization parameter for the penalized-likelihood score. If `None`, the BIC penalization is chosen, that is, `0.5 * log(N)` where `N` is the total number of observations, pooled across environments.
-- **approach** ({'greedy', 'rank'}, default='greedy'): The approach used by the outer procedure of GnIES. With `'greedy'` the greedy approach is selected, which corresponds to the results from figures 1,2 and 3 in the paper; the approach consists in greedily adding variables to the intervention targets estimate until the score does not improve. With `'rank'`, the faster ranking procedure is run, at a small cost in the accuracy of the estimates (see figure <TODO: figure> in the paper). The procedures are implemented in `gnies.main.fit_greedy` and `gnies.main.fit_rank`, respectively.
+- **data** (`list of numpy.ndarray`): A list with the samples from the different environments, where each sample is an array with columns corresponding to variables and rows to observations.
+- **lmbda** (`float, default=None`): The penalization parameter for the penalized-likelihood score. If `None`, the BIC penalization is chosen, that is, `0.5 * log(N)` where `N` is the total number of observations, pooled across environments.
+- **approach** (`{'greedy', 'rank'}, default='greedy'`): The approach used by the outer procedure of GnIES. With `'greedy'` targets are added and/or removed until the score does not improve; this corresponds to the results from figures 1,2 and 3 in the paper. With `'rank'`, the faster ranking procedure is run, at a small cost in the accuracy of the estimates (see figure <TODO: figure> in the paper). The two procedures are implemented in `gnies.main.fit_greedy` and `gnies.main.fit_rank`, respectively.
 
 
 ### Example using the greedy approach
