@@ -29,6 +29,8 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 """
+This module contains classes implementing interventional scores with different definitions
+for the intervention targets.
 """
 
 import numpy as np
@@ -37,19 +39,82 @@ from . import log_likelihood_means
 from .decomposable_score import DecomposableScore
 
 # --------------------------------------------------------------------
-# l0-penalized Gaussian log-likelihood score for samples from multiple
-# environments where certain variables have received noise interventions
+# Interventional Score Class (see FixedInterventionalScore below for GnIES score)
 
+class InterventionalScore(DecomposableScore):
+    """Class implementing interventional scores with different definitions
+    for the intervention targets: per environment or pooled (see
+    `fine_grained` parameter).
 
-class ExperimentalScore(DecomposableScore):
-    """
-    Attributes
+    The GnIES score is the score with `fine_grained=False` and is
+    implemented in the `FixedInterventionalScore` class, which
+    inherits from this one.
+
+    Parameters
     ----------
+    e : int
+        The number of environments.
+    p : int
+        The number of variables.
+    n_obs : list of ints
+        The number of observations from each environment.
+    N : int
+        The total number of observations from all environments.
+    lmbda : float
+        The penalization parameter used in the computation of the score.
+    max_iter : float
+        The maximum number of iterations for the alternating
+        optimization procedure.
+    tol : float
+        The threshold of convergence for the alternating optimization
+        procedure; when the maximum distance between elements of
+        consecutive Bs is below this threshold, stop the alternating
+        optimization and return the latest estimate.
+    fine_grained : bool
+        How finely we specify intervention targets. `True` means we
+        define intervention targets per environment; `False` means we
+        allow the noise-term distribution of an intervened variable to
+        vary across all environments. The latter is used for the
+        computation of the GnIES score.
+    centered : bool
+        Whether the data is centered before computing the score
+        (`centered=True`), or the noise-term means are also estimated
+        respecting the constraints imposed by `I`.
 
     """
 
-    def __init__(self, data, centered=True, fine_grained=True, lmbda=None, tol=1e-16, max_iter=10, debug=0):
-        super().__init__(data, cache=False, debug=debug)
+    def __init__(self, data, centered=True, fine_grained=True, lmbda=None, tol=1e-16, max_iter=10):
+        """
+        Creates a new instance of the score.
+
+        Parameters
+        ----------
+        data : list of numpy.ndarray
+            A list with the samples from the different environments, where
+            each sample is an array with columns corresponding to
+            variables and rows to observations.
+        centered : bool
+            Whether the data is centered before computing the score
+            (`centered=True`), or the noise-term means are also estimated
+            respecting the constraints imposed by `I`.
+        fine_grained : bool
+            How finely we specify intervention targets. `True` means we
+            define intervention targets per environment; `False` means we
+            allow the noise-term distribution of an intervened variable to
+            vary across all environments. The latter is used for the
+            computation of the GnIES score.
+        lmbda : float
+            The penalization parameter used in the computation of the score.
+        tol : float
+            The threshold of convergence for the alternating optimization
+            procedure; when the maximum distance between elements of
+            consecutive Bs is below this threshold, stop the alternating
+            optimization and return the latest estimate.
+        max_iter : float
+            The maximum number of iterations for the alternating
+            optimization procedure.
+        """
+        super().__init__(data, cache=False)
         self.e = len(data)
         self.p = data[0].shape[1]
         self.n_obs = np.array([len(env) for env in data])
@@ -231,14 +296,13 @@ class ExperimentalScore(DecomposableScore):
             return b, nus, omegas
 
 # --------------------------------------------------------------------
-# Wrapper class
+# GnIES Score Class
 
+class FixedInterventionalScore(InterventionalScore):
 
-class FixedInterventionalScore(ExperimentalScore):
-
-    def __init__(self, data, I, centered=True, fine_grained=False, lmbda=None, tol=1e-16, max_iter=10, debug=0):
+    def __init__(self, data, I, centered=True, fine_grained=False, lmbda=None, tol=1e-16, max_iter=10):
         self.I = I
-        super().__init__(data, centered, fine_grained, lmbda, tol, max_iter, debug)
+        super().__init__(data, centered, fine_grained, lmbda, tol, max_iter)
 
     def full_score(self, A):
         return super().full_score(A, self.I)

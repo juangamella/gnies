@@ -43,13 +43,14 @@ endif
 
 # Run the example scripts in the README
 examples:
-	PYTHONPATH=./ python3 docs/gnies_example.py	
 	PYTHONPATH=./ python3 docs/gnies_example_rank.py
 	PYTHONPATH=./ python3 docs/gnies_example_greedy.py
 
+
+
 # Run the doctests
 doctests:
-	PYTHONPATH=./ python3 template/main.py
+	PYTHONPATH=./ python3 gnies/scores/gnies_score.py
 
 # Set up virtual environment
 venv:

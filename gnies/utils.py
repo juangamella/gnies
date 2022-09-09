@@ -922,7 +922,7 @@ def add_edges(A, no_edges, random_state=42):
 
 
 # --------------------------------------------------------------------
-# Functions for PDAG to CPDAG conversion
+# Functions for PDAG to CPDAG conversion (from the GES algorithm)
 
     # The following functions implement the conversion from PDAG to
     # CPDAG that is carried after each transition to a different
@@ -1190,8 +1190,198 @@ def label_edges(ordered):
             labelled[unknown, y] = COM if z_exists else REV
     return labelled
 
+
+# --------------------------------------------------------------------
+# Implementation of the Meek rules, see maximally_orient below
+
+def rule_1(i, j, A):
+    # If there is at least one parent of i which is not adjacent to j, orient the edge i->j
+    if len(pa(i, A)) > 0 and not pa(i, A) <= adj(j, A):
+        return True
+    else:
+        return False
+
+
+def rule_2(i, j, A):
+    # If there is a path i -> k -> j, then orient i ->j
+    return len(ch(i, A) & pa(j, A)) > 0
+
+
+def rule_3(i, j, A):
+    # If i is a neighbor of at least two parents of j, and these are
+    # NOT adjacent, then orient i -> j
+    intersection = neighbors(i, A) & pa(j, A)
+    # Check that there are at least two parents which are not adjacent
+    if len(intersection) >= 2:
+        for k in intersection:
+            for l in intersection - {k}:
+                if k not in adj(l, A):
+                    return True
+    return False
+
+
+def rule_4(i, j, A):
+    pa_j = pa(j, A)
+    n_i = neighbors(i, A)
+    # if i is a neighbor of a parent k of j, and a neighbor of a
+    # parent h of l, and j and h are not adjacent, orient i -> j
+    Ks = pa_j & n_i
+    if len(Ks) > 0:
+        Hs = n_i & set(reduce(lambda acc, k: acc | pa(k, A), Ks, set()))
+        if len(Hs) > 0:
+            # Check that h and j are not adjacent
+            adj_j = adj(j, A)
+            for h in Hs:
+                if h not in adj_j:
+                    return True
+    return False
+
+
+def maximally_orient(P, debug=False):
+    """Maximally orient the PDAG P by successive application of the meek
+    rules(see functions rule_{1, 2, 3, 4})
+
+    Parameters
+    ----------
+    P: np.array
+        Adjacency matrix of a PDAG.
+    debug : bool
+        If debugging traces should be printed.
+
+    Returns
+    -------
+    maximally_oriented: np.array
+        the maximally oriented PDAG
+
+    """
+    # Ensure that the given PDAG does admit a consistent extension
+    try:
+        pdag_to_dag(P)
+    except ValueError as e:
+        raise e
+    P = P.copy()
+    # Repeatedly apply meek rules until no edges can be oriented
+    oriented_edges = True
+    while oriented_edges:
+        oriented_edges = False
+        for (i, j) in undirected_edges(P):
+            if rule_1(i, j, P) or rule_2(i, j, P) or rule_3(i, j, P) or rule_4(i, j, P):
+                # orient i -> j
+                oriented_edges = True
+                if debug:
+                    rules = [rule_1(i, j, P), rule_2(i, j, P), rule_3(i, j, P), rule_4(i, j, P)]
+                    print('Rules: %s => Oriented %d -> %d' % (rules, i, j))
+                P[j, i] = 0
+            elif rule_1(j, i, P) or rule_2(j, i, P) or rule_3(j, i, P) or rule_4(j, i, P):
+                oriented_edges = True
+                # orient j -> i
+                if debug:
+                    rules = [rule_1(j, i, P), rule_2(j, i, P), rule_3(j, i, P), rule_4(j, i, P)]
+                    print('Rules: %s => Orjented %d -> %d' % (rules, j, i))
+                P[i, j] = 0
+    return P
+
+# --------------------------------------------------------------------
+# Implementation of the modified completion algorithm for GnIES
+
+
+def pdag_to_icpdag(P, I):
+    """Completion algorithm used in the inner procedure of the GnIES
+    algorithm. Given a PDAG representing some graphs in the I-equivalence class,
+    returns the I-CPDAG representing all of the graphs in the class.
+
+    Parameters
+    ----------
+    P: np.array
+        Adjacency matrix of the PDAG, where `P[i, j] = 1` and `P[j,i]
+        = 0` implies i -> j and `P[i, j] = P[j,i] = 1` implies `i -
+        j`.
+    I : set of ints
+        The intervention targets.
+
+    Returns
+    -------
+    icpdag : np.array
+        The adjacency matrix of the resulting I-CPDAG.
+
+    Raises
+    ------
+    ValueError :
+        If any variable in I has undirected edges in the given PDAG.
+
+    """
+    # Check that all edges around variables in I are oriented
+    for i in I:
+        if len(neighbors(i, P)) > 0:
+            msg = "Invalid PDAG: has undirected edges around %d for I=%s"
+            raise ValueError(msg % (i, I))
+    G = pdag_to_dag(P)
+    return dag_to_icpdag(G, I)
+
+
+def dag_to_icpdag(G, I, debug=False):
+    """Given a DAG adjacency G and intervention targets I, return the
+    I-CPDAG corresponding to its I-equivalence class.
+
+    """
+    P = dag_to_cpdag(G)
+    # Construct edges that must be oriented
+    directed_edges = []
+    for i in I:
+        directed_edges += [(i, j) for j in ch(i, G)]
+        directed_edges += [(j, i) for j in pa(i, G)]
+    while len(directed_edges) > 0:
+        print(directed_edges) if debug else None
+        (x, y) = directed_edges.pop()
+        P[y, x] = 0
+        P = maximally_orient(P, debug)
+    assert is_consistent_extension(G, P)
+    return P
+
+
 # --------------------------------------------------------------------
 # General utilities
+
+def all_dags(pdag, max_combinations=None):
+    """
+    Given a PDAG, enumerate all its consistent extensions(DAGs).
+
+    Parameters
+    ----------
+    pdag: np.array
+        Adjacency matrix representing the PDAG connectivity, where
+        P[i, j] != 0 = > i -> j.
+
+    Returns
+    -------
+    dags: np.array
+        The adjacencies of the consistent extensions.
+    """
+    fro, to = np.where(only_undirected(pdag))
+    undirected_edges = np.array(list(filter(lambda e: e[0] > e[1], zip(fro, to))))
+    if max_combinations is not None and 2**len(undirected_edges) > max_combinations:
+        raise ValueError("The number of different edge orientations (%d) is over the value given for max_combinations (%d)" % (2**len(undirected_edges), max_combinations))
+    assert len(undirected_edges) == np.sum(only_undirected(pdag)) / 2
+    if len(undirected_edges) == 0:
+        return np.array([pdag.copy()])
+    # All possible orientations for the undirected edges
+    combinations = cartesian([np.array([True, False])] * len(undirected_edges), dtype=bool)
+    assert len(combinations) == 2**(np.sum(only_undirected(pdag)) / 2)
+    dags = []
+    # Iterate over all possible combinations, flipping the edges
+    oriented_edges = np.zeros_like(undirected_edges)
+    for flipped in combinations:
+        oriented_edges[flipped, :] = undirected_edges[:, [1, 0]][flipped]
+        oriented_edges[flipped == False, :] = undirected_edges[:, [0, 1]][flipped == False]
+        A = pdag.copy()
+        A[oriented_edges[:, 1], oriented_edges[:, 0]] = 0
+        dags.append(A)
+    # NOTE: Done in two steps to check assertion
+    assert len(np.unique(dags, axis=0)) == len(combinations)
+    # Filter graphs with cycles and inconsistent extensions
+    dags = [A for A in dags if is_dag(A) and is_consistent_extension(A, pdag)]
+    return np.array(dags)
+
 
 # Very fast way to generate a cartesian product of input arrays
 # Credit: https://gist.github.com/hernamesbarbara/68d073f551565de02ac5
@@ -1408,163 +1598,6 @@ def all_but(k, p):
     k = np.atleast_1d(k)
     return [i for i in range(p) if i not in k]
 
-# --------------------------------------------------------------------
-# New functions (not in GES repo), e.g. functions DAG to I-CPDAG conversion
-# TODO: documentation
-
-# Meek rules
 
 
-def rule_1(i, j, A):
-    # If there is at least one parent of i which is not adjacent to j, orient the edge i->j
-    if len(pa(i, A)) > 0 and not pa(i, A) <= adj(j, A):
-        return True
-    else:
-        return False
 
-
-def rule_2(i, j, A):
-    # If there is a path i -> k -> j, then orient i ->j
-    return len(ch(i, A) & pa(j, A)) > 0
-
-
-def rule_3(i, j, A):
-    # If i is a neighbor of at least two parents of j, and these are
-    # NOT adjacent, then orient i -> j
-    intersection = neighbors(i, A) & pa(j, A)
-    # Check that there are at least two parents which are not adjacent
-    if len(intersection) >= 2:
-        for k in intersection:
-            for l in intersection - {k}:
-                if k not in adj(l, A):
-                    return True
-    return False
-
-
-def rule_4(i, j, A):
-    pa_j = pa(j, A)
-    n_i = neighbors(i, A)
-    # if i is a neighbor of a parent k of j, and a neighbor of a
-    # parent h of l, and j and h are not adjacent, orient i -> j
-    Ks = pa_j & n_i
-    if len(Ks) > 0:
-        Hs = n_i & set(reduce(lambda acc, k: acc | pa(k, A), Ks, set()))
-        if len(Hs) > 0:
-            # Check that h and j are not adjacent
-            adj_j = adj(j, A)
-            for h in Hs:
-                if h not in adj_j:
-                    return True
-    return False
-
-
-def maximally_orient(P, debug=False):
-    """Maximally orient the PDAG P by successive application of the meek
-    rules(see functions rule_{1, 2, 3, 4})
-
-    Parameters
-    ----------
-    P: np.array
-        Adjacency matrix of a PDAG.
-    debug : bool
-        If debugging traces should be printed.
-
-    Returns
-    -------
-    maximally_oriented: np.array
-        the maximally oriented PDAG
-
-    """
-    # Ensure that the given PDAG does admit a consistent extension
-    try:
-        pdag_to_dag(P)
-    except ValueError as e:
-        raise e
-    P = P.copy()
-    # Repeatedly apply meek rules until no edges can be oriented
-    oriented_edges = True
-    while oriented_edges:
-        oriented_edges = False
-        for (i, j) in undirected_edges(P):
-            if rule_1(i, j, P) or rule_2(i, j, P) or rule_3(i, j, P) or rule_4(i, j, P):
-                # orient i -> j
-                oriented_edges = True
-                if debug:
-                    rules = [rule_1(i, j, P), rule_2(i, j, P), rule_3(i, j, P), rule_4(i, j, P)]
-                    print('Rules: %s => Oriented %d -> %d' % (rules, i, j))
-                P[j, i] = 0
-            elif rule_1(j, i, P) or rule_2(j, i, P) or rule_3(j, i, P) or rule_4(j, i, P):
-                oriented_edges = True
-                # orient j -> i
-                if debug:
-                    rules = [rule_1(j, i, P), rule_2(j, i, P), rule_3(j, i, P), rule_4(j, i, P)]
-                    print('Rules: %s => Orjented %d -> %d' % (rules, j, i))
-                P[i, j] = 0
-    return P
-
-
-def pdag_to_icpdag(P, I):
-    # Check that all edges around variables in I are oriented
-    for i in I:
-        if len(neighbors(i, P)) > 0:
-            msg = "Invalid PDAG: has undirected edges around %d for I=%s"
-            raise ValueError(msg % (i, I))
-    G = pdag_to_dag(P)
-    return dag_to_icpdag(G, I)
-
-
-def dag_to_icpdag(G, I, debug=False):
-    P = dag_to_cpdag(G)
-    # Construct edges that must be oriented
-    directed_edges = []
-    for i in I:
-        directed_edges += [(i, j) for j in ch(i, G)]
-        directed_edges += [(j, i) for j in pa(i, G)]
-    while len(directed_edges) > 0:
-        print(directed_edges) if debug else None
-        (x, y) = directed_edges.pop()
-        P[y, x] = 0
-        P = maximally_orient(P, debug)
-    assert is_consistent_extension(G, P)
-    return P
-
-
-def all_dags(pdag, max_combinations=None):
-    """
-    Given a PDAG, enumerate all its consistent extensions(DAGs).
-
-    Parameters
-    ----------
-    pdag: np.array
-        Adjacency matrix representing the PDAG connectivity, where
-        P[i, j] != 0 = > i -> j.
-
-    Returns
-    -------
-    dags: np.array
-        The adjacencies of the consistent extensions.
-    """
-    fro, to = np.where(only_undirected(pdag))
-    undirected_edges = np.array(list(filter(lambda e: e[0] > e[1], zip(fro, to))))
-    if max_combinations is not None and 2**len(undirected_edges) > max_combinations:
-        raise ValueError("The number of different edge orientations (%d) is over the value given for max_combinations (%d)" % (2**len(undirected_edges), max_combinations))
-    assert len(undirected_edges) == np.sum(only_undirected(pdag)) / 2
-    if len(undirected_edges) == 0:
-        return np.array([pdag.copy()])
-    # All possible orientations for the undirected edges
-    combinations = cartesian([np.array([True, False])] * len(undirected_edges), dtype=bool)
-    assert len(combinations) == 2**(np.sum(only_undirected(pdag)) / 2)
-    dags = []
-    # Iterate over all possible combinations, flipping the edges
-    oriented_edges = np.zeros_like(undirected_edges)
-    for flipped in combinations:
-        oriented_edges[flipped, :] = undirected_edges[:, [1, 0]][flipped]
-        oriented_edges[flipped == False, :] = undirected_edges[:, [0, 1]][flipped == False]
-        A = pdag.copy()
-        A[oriented_edges[:, 1], oriented_edges[:, 0]] = 0
-        dags.append(A)
-    # NOTE: Done in two steps to check assertion
-    assert len(np.unique(dags, axis=0)) == len(combinations)
-    # Filter graphs with cycles and inconsistent extensions
-    dags = [A for A in dags if is_dag(A) and is_consistent_extension(A, pdag)]
-    return np.array(dags)
