@@ -194,6 +194,7 @@ def score_graphs(score_class, graphs, targets, datasets, debug=False):
     # Compute scores
     start = time.time()
     for k, data in enumerate(datasets):
+        data = list(data)
         for j, I in enumerate(targets):
             print("Computing scores for dataset %d and targets %s" % (k + 1, targets)) if debug else None
             score = score_class(data, I)
@@ -406,7 +407,7 @@ class ScoreTests(unittest.TestCase):
         graphs = [self.true_A]
         graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
         # Generate random intervention targets
-        interventions = [self.true_targets]
+        interventions = [set.union(*self.true_targets)]
         for _ in range(K):
             random_interventions = sempler.generators.intervention_targets(self.p,
                                                                            self.e,
@@ -469,7 +470,7 @@ class ScoreTests(unittest.TestCase):
         graphs = [self.true_A]
         graphs += [sempler.generators.dag_avg_deg(self.p, k, random_state=i) for i in range(G)]
         # Generate random intervention targets
-        interventions = [self.true_targets]
+        interventions = [set.union(*self.true_targets)]
         for _ in range(K):
             random_interventions = sempler.generators.intervention_targets(self.p,
                                                                            self.e,

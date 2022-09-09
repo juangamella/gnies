@@ -36,9 +36,9 @@ GnIES paper: <TODO: arxiv link>
 """
 
 import numpy as np
-from . import log_likelihood
-from . import log_likelihood_means
-from .decomposable_score import DecomposableScore
+import gnies.scores.log_likelihood as log_likelihood
+import gnies.scores.log_likelihood_means as log_likelihood_means
+from gnies.scores.decomposable_score import DecomposableScore
 import gnies.utils as utils
 
 # --------------------------------------------------------------------
@@ -107,12 +107,78 @@ class GnIESScore(DecomposableScore):
             optimization procedure.
         cache : bool, default=True
             Whether the computation of the local score should be cached.
+
+        Raises
+        ------
+        TypeError :
+            If data is not a list of numpy.ndarray or I is not a set.
+        ValueError :
+            If I is not a subset of {0,...,p-1}; if the given samples
+            have different number of variables, or a sample has a
+            single observation is given (at least two are needed to
+            compute the sample covariances)
+
+        Examples
+        --------
+
+        >>> data = list(rng.uniform(size=(5,1000,20)))
+        >>> GnIESScore(data, I=set())
+        <__main__.GnIESScore object at 0x...>
+
+        >>> bad_data = data.copy()
+        >>> bad_data[0] = bad_data[0][:,:-1]
+        >>> GnIESScore(bad_data, set())
+        Traceback (most recent call last):
+        ...
+        ValueError: All samples must have the same number of variables.
+
+        >>> bad_data = data.copy()
+        >>> bad_data[0] = bad_data[0][[0],:]
+        >>> GnIESScore(bad_data, set())
+        Traceback (most recent call last):
+        ...
+        ValueError: Each sample must contain at least two observations to estimate the covariance matrix.
+
+        >>> GnIESScore(data, {20})
+        Traceback (most recent call last):
+        ...
+        ValueError: I must be a subset of {0,...,p-1}.
+
         """
+        # Check input: data
+        type_msg = "data should be a list of numpy.ndarray."
+        if isinstance(data, list):
+            # Check that all samples are arrays
+            for i, x in enumerate(data):
+                if not isinstance(x, np.ndarray):
+                    raise TypeError(type_msg)
+            # Check that all samples have the same number of variables
+            ps = np.array([x.shape[1] for x in data])
+            if len(np.unique(ps)) > 1:
+                raise ValueError(
+                    "All samples must have the same number of variables.")
+            p = data[0].shape[1]
+            # Check that all samples have at least two observations
+            n_obs = np.array([len(sample) for sample in data])
+            if (n_obs == 1).any():
+                raise ValueError(
+                    "Each sample must contain at least two observations to estimate the covariance matrix.")
+        else:
+            raise TypeError(type_msg)
+
+        # Check input: I
+        if isinstance(I, set):
+            if not I <= set(range(p)):
+                raise ValueError("I must be a subset of {0,...,p-1}.")
+        else:
+            raise TypeError("I must be a set of ints.")
+
+        # Intialize parameters
         super().__init__(data, cache=cache)
         self.I = I.copy()
-        self.e = len(data)
-        self.p = data[0].shape[1]
-        self.n_obs = np.array([len(env) for env in data])
+        self.e = len(self._data)
+        self.p = self._data[0].shape[1]
+        self.n_obs = np.array([len(env) for env in self._data])
         self.N = sum(self.n_obs)
         self.lmbda = 0.5 * np.log(self.N) if lmbda is None else lmbda
         self.max_iter = max_iter
@@ -141,7 +207,14 @@ class GnIESScore(DecomposableScore):
         new_I : set of ints
             The new intervention targets.
 
+        Raises
+        ------
+        ValueError :
+            If new_I is not a subset of {0,...,p-1}.
         """
+        if not new_I <= set(range(self.p)):
+            raise ValueError("I must be a subset of {0,...,p-1}.")
+
         change = (self.I - new_I) | (new_I - self.I)
         self.prune_cache(change)
         self.I = new_I.copy()
@@ -638,3 +711,9 @@ def _embedd(b, p, idx):
 #             prev_delta = delta
 #     print(" MAX ITER REACHED") if debug else None
 #     return M, E
+
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod(extraglobs={'rng': np.random.default_rng(42)},
+                    verbose=True,
+                    optionflags=doctest.ELLIPSIS)

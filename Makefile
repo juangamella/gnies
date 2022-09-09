@@ -50,7 +50,7 @@ examples:
 
 # Run the doctests
 doctests:
-	PYTHONPATH=./ python3 template/main.py
+	PYTHONPATH=./ python3 gnies/scores/gnies_score.py
 
 # Set up virtual environment
 venv:

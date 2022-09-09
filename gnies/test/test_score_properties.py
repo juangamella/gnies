@@ -36,11 +36,11 @@ import numpy as np
 import sempler
 import sempler.generators
 import gnies.utils as utils
-import causalicp as icp
+# import causalicp as icp
 import pickle
 import time
 
-from termcolor import colored
+# from termcolor import colored
 from gnies.scores import GnIESScore as Score
 
 NUM_GRAPHS = 100
