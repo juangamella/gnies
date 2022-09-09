@@ -33,9 +33,12 @@ def fit(
 )
 ```
 
-A detailed documentation can be found in the function's [docstring](<TODO: Add link>).
+A detailed documentation can be found in the function's [docstring](https://github.com/juangamella/gnies/blob/develop/gnies/main.py#L40). The most important parameters are:
 
-We offer the two approaches for selection of variables in the outer procedure of the algorithm; they can be set with the parameter `approach`, or directly through the functions [`gnies.fit_greedy`](<TODO:link>) and [`gnies.fit_rank`](<TODO:link>) in the [`gnies.main`](gnies/main.py) module. With `approach='greedy'` the greedy approach is selected, which corresponds to the results from figures 1,2 and 3 in the paper; the approach consists in greedily adding variables to the intervention targets estimate. With `approach='rank'`, the faster ranking procedure is run, at a small cost in the accuracy of the estimates (see figure <TODO: figure> in the paper).
+- **data** (`list of numpy.ndarray`): A list with the samples from the different environments, where each sample is an array with columns corresponding to variables and rows to observations.
+- **lmbda** (`float, default=None`): The penalization parameter for the penalized-likelihood score. If `None`, the BIC penalization is chosen, that is, `0.5 * log(N)` where `N` is the total number of observations from all environments.
+- **approach** (`{'greedy', 'rank'}, default='greedy'`): The approach used by the outer procedure of GnIES. With `'greedy'` targets are added and/or removed until the score does not improve; this corresponds to the results from figures 1,2 and 3 in the paper. With `'rank'`, the faster ranking procedure is run, at a small cost in the accuracy of the estimates (see figure <TODO: figure> in the paper). The two procedures are implemented in `gnies.main.fit_greedy` and `gnies.main.fit_rank`, respectively.
+
 
 ### Example using the greedy approach
 
@@ -58,7 +61,7 @@ data = [
 ]
 
 # Run GnIES
-_score, icpdag, I = gnies.fit_greedy(data)
+_score, icpdag, I = gnies.fit(data)
 print(icpdag, I)
 
 # Output:
@@ -74,25 +77,10 @@ print(icpdag, I)
 #  [0 0 0 0 0 0 0 0 0 0]] {1, 2, 3}
 ```
 
-### Example using the faster ranking approach**
+### Example using the faster ranking approach
 
 ```python
-import sempler, sempler.generators
-import gnies
-
-# Generate a random SCM using sempler
-W = sempler.generators.dag_avg_deg(10, 2.1, 0.5, 1, random_state=42)
-scm = sempler.LGANM(W, (0, 0), (1, 2), random_state=42)
-
-# Generate interventional data
-n = 1000
-data = [
-    scm.sample(n, random_state=42),
-    scm.sample(n, noise_interventions={1: (0, 11)}, random_state=42),
-    scm.sample(n, noise_interventions={2: (0, 12), 3: (0, 13)}, random_state=42),
-]
-
-# Run GnIES
+# Run GnIES (on the same data as above)
 _score, icpdag, I = gnies.fit(data, approach='rank')
 print(icpdag, I)
 
@@ -113,18 +101,18 @@ print(icpdag, I)
 
 The source code modules can be found inside the `gnies/` directory. These include:
 
-  - `gnies.main` which is the main module with the calls to start GnIES.
-  - `gnies.utils` contains auxiliary functions and the modified completion algorithm to transform PDAGs into a I-CPDAG, in the function `pdag_to_icpdag`.
+  - [`gnies.main`](gnies/main.py) which is the main module with the calls to start GnIES.
+  - [`gnies.utils`](gnies/utils.py) contains auxiliary functions and the modified completion algorithm to transform PDAGs into a I-CPDAG, in the function `pdag_to_icpdag`.
   - `scores/` contains the modules with the score classes:
-      - `ges.scores.decomposable_score` contains the base class for decomposable score classes (see that module for more details).
-      - `ges.scores.gnies_score` contains an implementation of the cached GnIES score, as described in section 4 of the paper.
+      - [`ges.scores.decomposable_score`](gnies/scores/decomposable_score.py) contains the base class for decomposable score classes (see that module for more details).
+      - [`ges.scores.gnies_score`](gnies/scores/gnies_score.py) contains an implementation of the cached GnIES score, as described in section 4 of the paper.
    - `test/` contains the unit tests of the scores and other components.
 
 ## Tests
 
 All components come with unit tests to match, and some property-based tests. Of course, this doesn't mean there are no bugs, but hopefully it means *they are less likely* :)
 
-The tests can be run with `make test`. You can add `SUITE=<module_name>` to run a particular module only. There are, however, additional dependencies to run the tests. You can find these in [`requirements_tests.txt`](requirements_tests.txt).
+The tests can be run with `make test`. You can add `SUITE=<module_name>` to run a particular module only. There is, however, the additional dependency of the [`sempler`](https://github.com/juangamella/sempler) package to run the tests. You can find the details in [`requirements_tests.txt`](requirements_tests.txt).
 
 ## Feedback
 
