@@ -40,8 +40,8 @@ import time
 import os
 import gnies
 
-NUM_GRAPHS = 2
-p = 8
+NUM_GRAPHS = 10
+p = 6
 e = 4
 n = 1000
 rng = np.random.default_rng(42)
@@ -67,7 +67,7 @@ class KnownTargetsTests(unittest.TestCase):
             for i in range(NUM_GRAPHS):
                 print()
                 print("Testing graph %d/%d" % (i + 1, NUM_GRAPHS))
-                data = gen_data(i)
+                data = gen_data(i * 11)
                 targets = list(rng.permutation(range(p)))
                 known_targets = set()
                 while True:
@@ -90,7 +90,7 @@ class KnownTargetsTests(unittest.TestCase):
             for i in range(NUM_GRAPHS):
                 print()
                 print("  Testing graph %d/%d" % (i + 1, NUM_GRAPHS))
-                data = gen_data(i)
+                data = gen_data(i * 22)
                 targets = list(rng.permutation(range(p)))
                 known_targets = set()
                 while True:
@@ -112,7 +112,7 @@ class KnownTargetsTests(unittest.TestCase):
             for i in range(NUM_GRAPHS):
                 print()
                 print("  Testing graph %d/%d" % (i + 1, NUM_GRAPHS))
-                data = gen_data(i)
+                data = gen_data(i * 33)
                 targets = list(rng.permutation(range(p)))
                 known_targets = set()
                 while True:
