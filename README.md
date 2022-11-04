@@ -20,6 +20,7 @@ GnIES can be run through the function `gnies.fit`:
 def fit(
     data,
     lmbda=None,
+    known_targets=set(),
     approach="greedy",
     # Parameters used for greedy approach
     I0=set(),
