@@ -33,6 +33,7 @@ import ges
 from gnies.scores import GnIESScore as Score
 import gnies.utils as utils
 
+# TODO: Docstrings for known_targets
 
 # --------------------------------------------------------------------
 # Public API
@@ -41,6 +42,7 @@ import gnies.utils as utils
 def fit(
     data,
     lmbda=None,
+    known_targets=set(),
     approach="greedy",
     # Parameters used for greedy approach
     I0=set(),
@@ -50,7 +52,7 @@ def fit(
     # Parameters used by inner-procedure (modified GES)
     ges_iterate=True,
     ges_phases=["forward", "backward", "turning"],
-    debug=0
+    debug=0,
 ):
     """Runs the GnIES algorithm on the given data, producing an estimate
     of the I-equivalence class and the intervention targets.
@@ -66,6 +68,9 @@ def fit(
         score. If `None`, the BIC penalization is chosen, that is,
         `0.5 * log(N)` where `N` is the total number of observations,
         pooled across environments.
+    known_targets : set, default=set()
+        The set of known intervention targets, which are always kept
+        as part of the target estimate of the outer procedure.
     approach : {'greedy', 'rank'}, default='greedy'
         The approach used by the outer procedure of GnIES. 'greedy'
         means that intervention targets are greedily added/removed;
@@ -115,9 +120,9 @@ def fit(
 
     """
     if approach == "greedy":
-        return fit_greedy(data, lmbda, I0, phases, ges_iterate, ges_phases, debug)
+        return fit_greedy(data, lmbda, known_targets, I0, phases, ges_iterate, ges_phases, debug)
     elif approach == "rank":
-        return fit_rank(data, lmbda, direction, ges_iterate, ges_phases, debug)
+        return fit_rank(data, lmbda, known_targets, direction, ges_iterate, ges_phases, debug)
     else:
         raise ValueError('Invalid value "%s" for parameter "approach"' % approach)
 
@@ -125,6 +130,7 @@ def fit(
 def fit_greedy(
     data,
     lmbda=None,
+    known_targets=set(),
     I0=set(),
     phases=["forward", "backward"],
     ges_iterate=True,
@@ -145,9 +151,12 @@ def fit_greedy(
         score. If `None`, the BIC penalization is chosen, that is,
         `0.5 * log(N)` where `N` is the total number of observations,
         pooled across environments.
+    known_targets : set, default=set()
+        The set of known intervention targets, which are always kept
+        as part of the target estimate of the outer procedure.
     I0 : set, default=set()
-        The initial set of intervention targets, to which targets are
-        added/removed.
+        Together with `known_targets`, this makes initial set of
+        intervention targets, to which targets are added/removed.
     phases : [{'forward', 'backward'}*], default=['forward', 'backward']
         Specifies which phases of the outer procedure are run.
     ges_phases : [{'forward', 'backward', 'turning'}*], optional
@@ -172,31 +181,29 @@ def fit_greedy(
         j`.
     I : set of ints
         The estimate of the intervention targets.
+
     """
 
     print("Running GnIES with greedy phases %s" % phases) if debug else None
     # Inner procedure parameters
-    params = {
-        "phases": ges_phases,
-        "iterate": ges_iterate,
-        "debug": 2 if debug > 1 else 0,
-    }
+    params = {"phases": ges_phases, "iterate": ges_iterate, "debug": 2 if debug > 1 else 0}
 
-    # Iteration 0: initial set
-    score_class = Score(data, I0, lmbda=lmbda)
-    current_estimate, current_score = _inner_procedure(score_class, I0, **params)
+    # Iteration 0: initial set + known targets
+    current_I = I0 | known_targets
+    score_class = Score(data, current_I, lmbda=lmbda)
+    current_estimate, current_score = _inner_procedure(score_class, current_I, **params)
 
     # Iterate
     p = score_class.p
-    current_I = I0
     full_I = set(range(p))
     phase = "forward"
     for phase in phases:
         print("  GnIES %s phase" % phase) if debug else None
         while True:
+            assert known_targets <= current_I
             print("    Current I=%s (score = %0.2f)" % (current_I, current_score)) if debug else None
             scores = []
-            next_Is = full_I - current_I if phase == "forward" else current_I
+            next_Is = full_I - current_I if phase == "forward" else current_I - known_targets
             # If no more variables can be added/removed, end this phase
             if len(next_Is) == 0:
                 break
@@ -221,6 +228,7 @@ def fit_greedy(
 def fit_rank(
     data,
     lmbda=None,
+    known_targets=set(),
     direction="forward",
     ges_iterate=True,
     ges_phases=["forward", "backward", "turning"],
@@ -243,6 +251,9 @@ def fit_rank(
         score. If `None`, the BIC penalization is chosen, that is,
         `0.5 * log(N)` where `N` is the total number of observations,
         pooled across environments.
+    known_targets : set, default=set()
+        The set of known intervention targets, which are always kept
+        as part of the target estimate of the outer procedure.
     direction : {'forward', 'backward'}, default='forward'
         If 'forward', we start with an empty intervention set and add
         targets according to the found ordering. If 'backward', we
@@ -275,11 +286,7 @@ def fit_rank(
     print("Running GnIES with %s-rank approach" % direction) if debug else None
 
     # Inner procedure parameters
-    params = {
-        "phases": ges_phases,
-        "iterate": ges_iterate,
-        "debug": 2 if debug > 1 else 0,
-    }
+    params = {"phases": ges_phases, "iterate": ges_iterate, "debug": 2 if debug > 1 else 0}
 
     # First fit with full I to obtain an ordering based on the variance of the
     # noise-term variance estimates of each variable
@@ -294,8 +301,8 @@ def fit_rank(
     order = list(np.argsort(variances))
     # Setup for the greedy outer procedure
     if direction == "forward":
-        current_I = set()
-        score_class = Score(data, set(), lmbda=lmbda)
+        current_I = known_targets
+        score_class = Score(data, current_I, lmbda=lmbda)
         current_estimate, current_score = _inner_procedure(score_class, current_I, **params)
         verb = "Adding"
         order.reverse()
@@ -309,6 +316,9 @@ def fit_rank(
     # ordering, until the score does not improve
     print("  %s intervention targets in order %s" % (verb, order)) if debug else None
     for i in order:
+        assert known_targets <= current_I
+        if i in known_targets:
+            continue
         print("    Current I=%s (score = %0.2f)" % (current_I, current_score)) if debug else None
         next_I = current_I | {i} if direction == "forward" else current_I - {i}
         score_class.set_I(next_I)
