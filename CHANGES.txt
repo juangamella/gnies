@@ -1,3 +1,5 @@
+v0.3.2, 2022-11-29
+-- Updated README with link to the paper.
 v0.3.1, 2022-11-04
 -- New parameter known_targets to allow for background knowledge about intervention targets.
 v0.3.0, 2022-09-09
