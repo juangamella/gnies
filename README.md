@@ -1,6 +1,6 @@
 # GnIES Algorithm for Causal Discovery
 
-This repository contains a python implementation of the GnIES algorithm from the paper [*"Characterization and Greedy Learning of Gaussian Structural Causal Models under Unknown Interventions"*](<TODO: arxiv link>) by Juan L. Gamella, Armeen Taeb, Christina Heinze-Deml and Peter Bühlmann.
+This repository contains a python implementation of the GnIES algorithm from the paper [*"Characterization and Greedy Learning of Gaussian Structural Causal Models under Unknown Interventions"*](https://arxiv.org/abs/2211.14897) by Juan L. Gamella, Armeen Taeb, Christina Heinze-Deml and Peter Bühlmann.
 
 If you find this code useful, please consider citing:
 
@@ -8,6 +8,7 @@ If you find this code useful, please consider citing:
 @article{gamella2022characterization,
   title={Characterization and Greedy Learning of Gaussian Structural Causal Models under Unknown Interventions},
   author={Gamella, Juan L. and Taeb, Armeen and Heinze-Deml, Christina and B\"uhlmann, Peter},
+  journal={arXiv preprint arXiv:2211.14897},
   year={2022}
 }
 ```
