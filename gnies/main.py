@@ -52,6 +52,7 @@ def fit(
     phases=["forward", "backward"],
     # Parameters used for rank approach
     direction="forward",
+    center=True,
     # Parameters used by inner-procedure (modified GES)
     ges_iterate=True,
     ges_phases=["forward", "backward", "turning"],
@@ -93,6 +94,10 @@ def fit(
         intervention set and add targets according to the found
         ordering; if 'backward', we start with the full set and remove
         targets instead.
+    center : bool, default=True
+        Whether the data is centered when computing the score
+        (`center=True`), or the noise-term means are also estimated
+        respecting the constraints imposed by `I`.
     ges_iterate : bool, default=False
         Indicates whether the phases of the inner procedure (modified
         GES) should be iterated more than once.
@@ -124,11 +129,26 @@ def fit(
     """
     if approach == "greedy":
         return fit_greedy(
-            data, lmbda, known_targets, I0, phases, ges_iterate, ges_phases, debug
+            data,
+            lmbda,
+            known_targets,
+            I0,
+            phases,
+            center,
+            ges_iterate,
+            ges_phases,
+            debug,
         )
     elif approach == "rank":
         return fit_rank(
-            data, lmbda, known_targets, direction, ges_iterate, ges_phases, debug
+            data,
+            lmbda,
+            known_targets,
+            direction,
+            center,
+            ges_iterate,
+            ges_phases,
+            debug,
         )
     else:
         raise ValueError('Invalid value "%s" for parameter "approach"' % approach)
@@ -254,6 +274,7 @@ def fit_rank(
     lmbda=None,
     known_targets=set(),
     direction="forward",
+    center=True,
     ges_iterate=True,
     ges_phases=["forward", "backward", "turning"],
     debug=0,
@@ -282,6 +303,10 @@ def fit_rank(
         If 'forward', we start with an empty intervention set and add
         targets according to the found ordering. If 'backward', we
         start with the full set and remove targets.
+    center : bool, default=True
+        Whether the data is centered when computing the score
+        (`center=True`), or the noise-term means are also estimated
+        respecting the constraints imposed by `I`.
     ges_phases : [{'forward', 'backward', 'turning'}*], optional
         Which phases of the inner procedure (modified GES) are run,
         and in which order. Defaults to `['forward', 'backward',
@@ -321,7 +346,7 @@ def fit_rank(
     p = data[0].shape[1]
     e = len(data)
     full_I = set(range(p))
-    score_class = Score(data, full_I, lmbda=lmbda)
+    score_class = Score(data, full_I, lmbda=lmbda, centered=center)
     current_estimate, current_score = _inner_procedure(score_class, full_I, **params)
     assert utils.is_dag(current_estimate)
     _, omegas, _ = score_class._mle_full(current_estimate)
