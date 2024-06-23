@@ -45,6 +45,7 @@ endif
 examples:
 	PYTHONPATH=./ python3 docs/gnies_example_rank.py
 	PYTHONPATH=./ python3 docs/gnies_example_greedy.py
+	PYTHONPATH=./ python3 docs/gnies_example_uncentered.py	
 
 
 

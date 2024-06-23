@@ -37,7 +37,8 @@ algorithm described in Chickering's original GES paper from 2002.
 import numpy as np
 from functools import reduce
 import itertools
-import networkx as nx  # for d-separation
+
+# import networkx as nx  # for d-separation
 
 # --------------------------------------------------------------------
 # Graph functions for PDAGS
@@ -246,9 +247,10 @@ def chain_graph(p):
     A[ix, ix + 1] = 1
     return A
 
+
 def is_chain_graph(A):
     """Check whether the given DAG adjacency corresponds to a chain
-graph.
+    graph.
     """
     p = len(A)
     return (A == chain_graph(p)).all()
@@ -457,6 +459,7 @@ def semi_directed_paths(fro, to, A):
             stack = [(next_node, visited + [current_node], next_to_visit)] + stack
     return paths
 
+
 def separates(S, A, B, G):
     """Returns true if the set S separates A from B in G, i.e. if all
     paths in G from nodes in A to nodes in B contain a node in
@@ -482,7 +485,9 @@ def separates(S, A, B, G):
     """
     # Check that sets are pairwise disjoint
     if len(A & B) or len(A & S) or len(B & S):
-        raise ValueError("The sets S=%s,A=%s and B=%s are not pairwise disjoint" % (S, A, B))
+        raise ValueError(
+            "The sets S=%s,A=%s and B=%s are not pairwise disjoint" % (S, A, B)
+        )
     for a in A:
         for b in B:
             for path in semi_directed_paths(a, b, G):
@@ -491,26 +496,26 @@ def separates(S, A, B, G):
     return True
 
 
-def d_separated(S1, S2, S3, dag):
-    """Return True if S1 is d-separated from S2 given S3 in the given dag."""
-    G = nx.from_numpy_matrix(dag, create_using=nx.DiGraph)
-    return nx.d_separated(G, S1, S2, S3)
+# def d_separated(S1, S2, S3, dag):
+#     """Return True if S1 is d-separated from S2 given S3 in the given dag."""
+#     G = nx.from_numpy_matrix(dag, create_using=nx.DiGraph)
+#     return nx.d_separated(G, S1, S2, S3)
 
 
-def is_stable_set(S, j, I, G):
-    """Check if S is a stable set for j under interventions on targets I"""
-    # Todo: check for inputs
-    p = len(G)
-    # Build extended graph
-    extended = np.zeros((p + len(I), p + len(I)), dtype=int)
-    extended[0:p, 0:p] = (G != 0).astype(int)
-    # Add additional edges
-    int_variables = set()
-    for k, i in enumerate(I):
-        int_variables.add(p + k)
-        extended[p + k, i] = 1
-    # Check for d-separation in extended graph
-    return d_separated({j}, int_variables, S, extended)
+# def is_stable_set(S, j, I, G):
+#     """Check if S is a stable set for j under interventions on targets I"""
+#     # Todo: check for inputs
+#     p = len(G)
+#     # Build extended graph
+#     extended = np.zeros((p + len(I), p + len(I)), dtype=int)
+#     extended[0:p, 0:p] = (G != 0).astype(int)
+#     # Add additional edges
+#     int_variables = set()
+#     for k, i in enumerate(I):
+#         int_variables.add(p + k)
+#         extended[p + k, i] = 1
+#     # Check for d-separation in extended graph
+#     return d_separated({j}, int_variables, S, extended)
 
 
 def chain_component(i, G):
@@ -594,7 +599,7 @@ def vstructures(A):
     # parents are adjacent in A
     vstructs = []
     for c in colliders:
-        for (i, j) in itertools.combinations(pa(c, A), 2):
+        for i, j in itertools.combinations(pa(c, A), 2):
             if A[i, j] == 0 and A[j, i] == 0:
                 # Ordering might be defensive here, as
                 # itertools.combinations already returns ordered
@@ -619,7 +624,7 @@ def moral_graph(A):
        The adjacency of the (undirected) moral graph of A.
     """
     moral = skeleton(A)
-    for (i, _, j) in vstructures(A):
+    for i, _, j in vstructures(A):
         moral[i, j] = 1
         moral[j, i] = 1
     return moral
@@ -795,7 +800,11 @@ def is_consistent_extension(G, P, debug=False):
     # guaranteed to have
     # no undirected edges
     if debug:
-        print("v-structures (%s) (P,G): " % same_vstructures, vstructures(P), vstructures(G))
+        print(
+            "v-structures (%s) (P,G): " % same_vstructures,
+            vstructures(P),
+            vstructures(G),
+        )
         print("skeleton (%s) (P,G): " % same_skeleton, skeleton(P), skeleton(G))
         print("orientation (%s) (P,G): " % same_orientation, P, G)
     return same_vstructures and same_orientation and same_skeleton
@@ -857,8 +866,7 @@ def to_factorization(G):
 
 
 def is_supergraph(sup, A):
-    """Return True if sup is a supergraph of A.
-    """
+    """Return True if sup is a supergraph of A."""
     return (np.logical_and(sup, A) == A).all()
 
 
@@ -890,7 +898,7 @@ def remove_edges(A, no_edges, random_state=42):
     if len(edges) < no_edges:
         raise ValueError("There are not enough edges to remove.")
     pruned = A.copy()
-    for (fro, to) in rng.choice(edges, no_edges, replace=False):
+    for fro, to in rng.choice(edges, no_edges, replace=False):
         pruned[fro, to] = 0
     return pruned
 
@@ -907,7 +915,9 @@ def add_edges(A, no_edges, random_state=42):
     p = len(A)
     can_add = int(p * (p - 1) / 2 - A.sum())
     if no_edges > can_add:
-        raise ValueError("It is not possible to add %d edges to the given DAG." % no_edges)
+        raise ValueError(
+            "It is not possible to add %d edges to the given DAG." % no_edges
+        )
     # Add edges at random
     supergraph = A.copy()
     i = 0
@@ -917,48 +927,48 @@ def add_edges(A, no_edges, random_state=42):
         i += 1
         if is_dag(next_supergraph):
             supergraph = next_supergraph
-    assert (supergraph.sum() - A.sum() == no_edges)
+    assert supergraph.sum() - A.sum() == no_edges
     return supergraph
 
 
 # --------------------------------------------------------------------
 # Functions for PDAG to CPDAG conversion (from the GES algorithm)
 
-    # The following functions implement the conversion from PDAG to
-    # CPDAG that is carried after each transition to a different
-    # equivalence class, after the selection and application of the
-    # highest scoring insert/delete/turn operator. It consists of the
-    # succesive application of three algorithms, all described in
-    # Appendix C (pages 552,553) of Chickering's 2002 GES paper
-    # (www.jmlr.org/papers/volume3/chickering02b/chickering02b.pdf).
-    #
-    # The algorithms are:
+# The following functions implement the conversion from PDAG to
+# CPDAG that is carried after each transition to a different
+# equivalence class, after the selection and application of the
+# highest scoring insert/delete/turn operator. It consists of the
+# succesive application of three algorithms, all described in
+# Appendix C (pages 552,553) of Chickering's 2002 GES paper
+# (www.jmlr.org/papers/volume3/chickering02b/chickering02b.pdf).
+#
+# The algorithms are:
 
-    #   1. Obtaining a consistent extension of a PDAG, implemented in
-    #   the function pdag_to_dag.
-    #
-    #   2. Obtaining a total ordering of the edges of the extension
-    #   resulting from (1). It is summarized in Fig. 13 of
-    #   Chickering's paper and implemented in the function
-    #   order_edges.
-    #
-    #   3. Labelling the edges as compelled or reversible, by which we
-    #   can easily obtain the CPDAG. It is summarized in Fig. 14 of
-    #   Chickering's paper and implemented in the function label_edges.
+#   1. Obtaining a consistent extension of a PDAG, implemented in
+#   the function pdag_to_dag.
+#
+#   2. Obtaining a total ordering of the edges of the extension
+#   resulting from (1). It is summarized in Fig. 13 of
+#   Chickering's paper and implemented in the function
+#   order_edges.
+#
+#   3. Labelling the edges as compelled or reversible, by which we
+#   can easily obtain the CPDAG. It is summarized in Fig. 14 of
+#   Chickering's paper and implemented in the function label_edges.
 
-    # The above are put together in the function pdag_to_cpdag
+# The above are put together in the function pdag_to_cpdag
 
-    # NOTE!!!: Algorithm (1) is from the 1992 paper "A simple
-    # algorithm to construct a consistent extension of a partially
-    # oriented graph" by Dorit Dor and Michael Tarsi. There is an
-    # ERROR in the summarized version in Chickering's paper. In
-    # particular, the condition that N_x U Pa_x is a clique is not
-    # equivalent to the condition from Dor & Torsi that every neighbor
-    # of X should be adjacent to all of X's adjacent nodes. The
-    # condition summarized in Chickering is more restrictive (i.e. it
-    # also asks that the parents of X are adjacent to each other), but
-    # this only results in an error for some graphs, and was only
-    # uncovered during exhaustive testing.
+# NOTE!!!: Algorithm (1) is from the 1992 paper "A simple
+# algorithm to construct a consistent extension of a partially
+# oriented graph" by Dorit Dor and Michael Tarsi. There is an
+# ERROR in the summarized version in Chickering's paper. In
+# particular, the condition that N_x U Pa_x is a clique is not
+# equivalent to the condition from Dor & Torsi that every neighbor
+# of X should be adjacent to all of X's adjacent nodes. The
+# condition summarized in Chickering is more restrictive (i.e. it
+# also asks that the parents of X are adjacent to each other), but
+# this only results in an error for some graphs, and was only
+# uncovered during exhaustive testing.
 
 # The complete pipeline: pdag -> dag -> ordered -> labelled -> cpdag
 
@@ -984,6 +994,7 @@ def pdag_to_cpdag(pdag):
     dag = pdag_to_dag(pdag)
     # 2. Recover the cpdag
     return dag_to_cpdag(dag)
+
 
 # dag -> ordered -> labelled -> cpdag
 
@@ -1015,7 +1026,7 @@ def dag_to_cpdag(G):
     cpdag[labelled == 1] = labelled[labelled == 1]
     # set reversible edges
     fros, tos = np.where(labelled == -1)
-    for (x, y) in zip(fros, tos):
+    for x, y in zip(fros, tos):
         cpdag[x, y], cpdag[y, x] = 1, 1
     return cpdag
 
@@ -1062,7 +1073,9 @@ def pdag_to_dag(P, debug=False):
             n_i = neighbors(i, P)
             adj_i = adj(i, P)
             adj_neighbors = np.all([adj_i - {y} <= adj(y, P) for y in n_i])
-            print("   i:", i, ": n=", n_i, "adj=", adj_i, "ch=", ch(i, P)) if debug else None
+            print(
+                "   i:", i, ": n=", n_i, "adj=", adj_i, "ch=", ch(i, P)
+            ) if debug else None
             found = sink and adj_neighbors
             # If found, orient all incident undirected edges and
             # remove i from the subgraph
@@ -1194,6 +1207,7 @@ def label_edges(ordered):
 # --------------------------------------------------------------------
 # Implementation of the Meek rules, see maximally_orient below
 
+
 def rule_1(i, j, A):
     # If there is at least one parent of i which is not adjacent to j, orient the edge i->j
     if len(pa(i, A)) > 0 and not pa(i, A) <= adj(j, A):
@@ -1264,22 +1278,35 @@ def maximally_orient(P, debug=False):
     oriented_edges = True
     while oriented_edges:
         oriented_edges = False
-        for (i, j) in undirected_edges(P):
+        for i, j in undirected_edges(P):
             if rule_1(i, j, P) or rule_2(i, j, P) or rule_3(i, j, P) or rule_4(i, j, P):
                 # orient i -> j
                 oriented_edges = True
                 if debug:
-                    rules = [rule_1(i, j, P), rule_2(i, j, P), rule_3(i, j, P), rule_4(i, j, P)]
-                    print('Rules: %s => Oriented %d -> %d' % (rules, i, j))
+                    rules = [
+                        rule_1(i, j, P),
+                        rule_2(i, j, P),
+                        rule_3(i, j, P),
+                        rule_4(i, j, P),
+                    ]
+                    print("Rules: %s => Oriented %d -> %d" % (rules, i, j))
                 P[j, i] = 0
-            elif rule_1(j, i, P) or rule_2(j, i, P) or rule_3(j, i, P) or rule_4(j, i, P):
+            elif (
+                rule_1(j, i, P) or rule_2(j, i, P) or rule_3(j, i, P) or rule_4(j, i, P)
+            ):
                 oriented_edges = True
                 # orient j -> i
                 if debug:
-                    rules = [rule_1(j, i, P), rule_2(j, i, P), rule_3(j, i, P), rule_4(j, i, P)]
-                    print('Rules: %s => Orjented %d -> %d' % (rules, j, i))
+                    rules = [
+                        rule_1(j, i, P),
+                        rule_2(j, i, P),
+                        rule_3(j, i, P),
+                        rule_4(j, i, P),
+                    ]
+                    print("Rules: %s => Orjented %d -> %d" % (rules, j, i))
                 P[i, j] = 0
     return P
+
 
 # --------------------------------------------------------------------
 # Implementation of the modified completion algorithm for GnIES
@@ -1342,6 +1369,7 @@ def dag_to_icpdag(G, I, debug=False):
 # --------------------------------------------------------------------
 # General utilities
 
+
 def all_dags(pdag, max_combinations=None):
     """
     Given a PDAG, enumerate all its consistent extensions(DAGs).
@@ -1359,20 +1387,27 @@ def all_dags(pdag, max_combinations=None):
     """
     fro, to = np.where(only_undirected(pdag))
     undirected_edges = np.array(list(filter(lambda e: e[0] > e[1], zip(fro, to))))
-    if max_combinations is not None and 2**len(undirected_edges) > max_combinations:
-        raise ValueError("The number of different edge orientations (%d) is over the value given for max_combinations (%d)" % (2**len(undirected_edges), max_combinations))
+    if max_combinations is not None and 2 ** len(undirected_edges) > max_combinations:
+        raise ValueError(
+            "The number of different edge orientations (%d) is over the value given for max_combinations (%d)"
+            % (2 ** len(undirected_edges), max_combinations)
+        )
     assert len(undirected_edges) == np.sum(only_undirected(pdag)) / 2
     if len(undirected_edges) == 0:
         return np.array([pdag.copy()])
     # All possible orientations for the undirected edges
-    combinations = cartesian([np.array([True, False])] * len(undirected_edges), dtype=bool)
-    assert len(combinations) == 2**(np.sum(only_undirected(pdag)) / 2)
+    combinations = cartesian(
+        [np.array([True, False])] * len(undirected_edges), dtype=bool
+    )
+    assert len(combinations) == 2 ** (np.sum(only_undirected(pdag)) / 2)
     dags = []
     # Iterate over all possible combinations, flipping the edges
     oriented_edges = np.zeros_like(undirected_edges)
     for flipped in combinations:
         oriented_edges[flipped, :] = undirected_edges[:, [1, 0]][flipped]
-        oriented_edges[flipped == False, :] = undirected_edges[:, [0, 1]][flipped == False]
+        oriented_edges[flipped == False, :] = undirected_edges[:, [0, 1]][
+            flipped == False
+        ]
         A = pdag.copy()
         A[oriented_edges[:, 1], oriented_edges[:, 0]] = 0
         dags.append(A)
@@ -1432,7 +1467,7 @@ def cartesian(arrays, out=None, dtype=np.byte):
     if arrays[1:]:
         cartesian(arrays[1:], out=out[0:m, 1:])
         for j in range(1, arrays[0].size):
-            out[j * m:(j + 1) * m, 1:] = out[0:m, 1:]
+            out[j * m : (j + 1) * m, 1:] = out[0:m, 1:]
     return out
 
 
@@ -1532,7 +1567,7 @@ def delete(array, mask, axis=None):
         a copy of array with the elements specified by mask removed
 
     """
-    if np.version.version < '1.19.0':
+    if np.version.version < "1.19.0":
         idx = np.where(mask)[0]
         return np.delete(array, idx, axis)
     else:
@@ -1576,7 +1611,7 @@ def split_data(data, ratios, random_state=42):
         for i, ratio in enumerate(ratios):
             if i < n_folds:
                 fold_size = round(n * ratio)
-                fold_sample = sample[start:start + fold_size]
+                fold_sample = sample[start : start + fold_size]
             else:
                 fold_sample = sample[start::]
             folds[i].append(fold_sample)
@@ -1597,7 +1632,3 @@ def all_but(k, p):
     """Return [0,...,p-1] without k"""
     k = np.atleast_1d(k)
     return [i for i in range(p) if i not in k]
-
-
-
-

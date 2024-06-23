@@ -42,6 +42,7 @@ def fit(
     phases=["forward", "backward"],
     # Parameters used for rank approach
     direction="forward",
+    center=True,
     # Parameters used by inner-procedure (modified GES)
     ges_iterate=True,
     ges_phases=["forward", "backward", "turning"],
@@ -54,6 +55,7 @@ A detailed documentation can be found in the function's [docstring](https://gith
 - **data** (`list of numpy.ndarray`): A list with the samples from the different environments, where each sample is an array with columns corresponding to variables and rows to observations.
 - **lmbda** (`float, default=None`): The penalization parameter for the penalized-likelihood score. If `None`, the BIC penalization is chosen, that is, `0.5 * log(N)` where `N` is the total number of observations from all environments.
 - **approach** (`{'greedy', 'rank'}, default='greedy'`): The approach used by the outer procedure of GnIES. With `'greedy'` targets are added and/or removed until the score does not improve; this corresponds to the results from figures 1,2 and 3 in the paper. With `'rank'`, the faster ranking procedure is run, at a small cost in the accuracy of the estimates (see figure 7 in the paper). The two procedures are implemented in `gnies.main.fit_greedy` and `gnies.main.fit_rank`, respectively.
+- **center** (`bool, default=True`): Whether GnIES considers interventions on only the noise-term variance (`center=True`, i.e., data is centered before computing the score) or on both the mean and variance (`center=False`). The identifiability results in the paper correspond to (`center=True`), but (`center=False`) may improve power in some scenarios.
 
 
 ### Example using the greedy approach

@@ -34,6 +34,9 @@ from gnies.scores import GnIESScore as Score
 import gnies.utils as utils
 
 # TODO: Docstrings for known_targets
+# TODO:
+# - Made condition for improved score > instead of >=
+# - Removed centered as argument _inner_procedure since this is defined in the score that is passed to it; add
 
 # --------------------------------------------------------------------
 # Public API
@@ -49,6 +52,7 @@ def fit(
     phases=["forward", "backward"],
     # Parameters used for rank approach
     direction="forward",
+    center=True,
     # Parameters used by inner-procedure (modified GES)
     ges_iterate=True,
     ges_phases=["forward", "backward", "turning"],
@@ -90,6 +94,11 @@ def fit(
         intervention set and add targets according to the found
         ordering; if 'backward', we start with the full set and remove
         targets instead.
+    center : bool, default=True
+        Whether GnIES considers interventions only on the noise-term
+        variance (`center=True`, i.e., data is centered before
+        computing the score) or on both the mean and variance
+        (`center=False`).
     ges_iterate : bool, default=False
         Indicates whether the phases of the inner procedure (modified
         GES) should be iterated more than once.
@@ -120,9 +129,28 @@ def fit(
 
     """
     if approach == "greedy":
-        return fit_greedy(data, lmbda, known_targets, I0, phases, ges_iterate, ges_phases, debug)
+        return fit_greedy(
+            data,
+            lmbda,
+            known_targets,
+            I0,
+            phases,
+            center,
+            ges_iterate,
+            ges_phases,
+            debug,
+        )
     elif approach == "rank":
-        return fit_rank(data, lmbda, known_targets, direction, ges_iterate, ges_phases, debug)
+        return fit_rank(
+            data,
+            lmbda,
+            known_targets,
+            direction,
+            center,
+            ges_iterate,
+            ges_phases,
+            debug,
+        )
     else:
         raise ValueError('Invalid value "%s" for parameter "approach"' % approach)
 
@@ -133,6 +161,7 @@ def fit_greedy(
     known_targets=set(),
     I0=set(),
     phases=["forward", "backward"],
+    center=True,
     ges_iterate=True,
     ges_phases=["forward", "backward", "turning"],
     debug=0,
@@ -159,6 +188,11 @@ def fit_greedy(
         intervention targets, to which targets are added/removed.
     phases : [{'forward', 'backward'}*], default=['forward', 'backward']
         Specifies which phases of the outer procedure are run.
+    center : bool, default=True
+        Whether GnIES considers interventions only on the noise-term
+        variance (`center=True`, i.e., data is centered before
+        computing the score) or on both the mean and variance
+        (`center=False`).
     ges_phases : [{'forward', 'backward', 'turning'}*], optional
         Which phases of the inner procedure (modified GES) are run,
         and in which order. Defaults to `['forward', 'backward',
@@ -186,11 +220,15 @@ def fit_greedy(
 
     print("Running GnIES with greedy phases %s" % phases) if debug else None
     # Inner procedure parameters
-    params = {"phases": ges_phases, "iterate": ges_iterate, "debug": 2 if debug > 1 else 0}
+    params = {
+        "phases": ges_phases,
+        "iterate": ges_iterate,
+        "debug": 2 if debug > 1 else 0,
+    }
 
     # Iteration 0: initial set + known targets
     current_I = I0 | known_targets
-    score_class = Score(data, current_I, lmbda=lmbda)
+    score_class = Score(data, current_I, lmbda=lmbda, centered=center)
     current_estimate, current_score = _inner_procedure(score_class, current_I, **params)
 
     # Iterate
@@ -201,9 +239,13 @@ def fit_greedy(
         print("  GnIES %s phase" % phase) if debug else None
         while True:
             assert known_targets <= current_I
-            print("    Current I=%s (score = %0.2f)" % (current_I, current_score)) if debug else None
+            print(
+                "    Current I=%s (score = %0.2f)" % (current_I, current_score)
+            ) if debug else None
             scores = []
-            next_Is = full_I - current_I if phase == "forward" else current_I - known_targets
+            next_Is = (
+                full_I - current_I if phase == "forward" else current_I - known_targets
+            )
             # If no more variables can be added/removed, end this phase
             if len(next_Is) == 0:
                 break
@@ -216,8 +258,12 @@ def fit_greedy(
             # Pick the maximally scoring addition/removal
             new_score, new_I, new_estimate = max(scores)
             # If the score was improved, repeat the greedy step
-            if new_score >= current_score:
-                current_score, current_I, current_estimate = new_score, new_I, new_estimate
+            if new_score > current_score:
+                current_score, current_I, current_estimate = (
+                    new_score,
+                    new_I,
+                    new_estimate,
+                )
             # Otherwise, halt
             else:
                 print("    Score was not improved.") if debug else None
@@ -230,6 +276,7 @@ def fit_rank(
     lmbda=None,
     known_targets=set(),
     direction="forward",
+    center=True,
     ges_iterate=True,
     ges_phases=["forward", "backward", "turning"],
     debug=0,
@@ -258,6 +305,11 @@ def fit_rank(
         If 'forward', we start with an empty intervention set and add
         targets according to the found ordering. If 'backward', we
         start with the full set and remove targets.
+    center : bool, default=True
+        Whether GnIES considers interventions only on the noise-term
+        variance (`center=True`, i.e., data is centered before
+        computing the score) or on both the mean and variance
+        (`center=False`).
     ges_phases : [{'forward', 'backward', 'turning'}*], optional
         Which phases of the inner procedure (modified GES) are run,
         and in which order. Defaults to `['forward', 'backward',
@@ -286,14 +338,18 @@ def fit_rank(
     print("Running GnIES with %s-rank approach" % direction) if debug else None
 
     # Inner procedure parameters
-    params = {"phases": ges_phases, "iterate": ges_iterate, "debug": 2 if debug > 1 else 0}
+    params = {
+        "phases": ges_phases,
+        "iterate": ges_iterate,
+        "debug": 2 if debug > 1 else 0,
+    }
 
     # First fit with full I to obtain an ordering based on the variance of the
     # noise-term variance estimates of each variable
     p = data[0].shape[1]
     e = len(data)
     full_I = set(range(p))
-    score_class = Score(data, full_I, lmbda=lmbda)
+    score_class = Score(data, full_I, lmbda=lmbda, centered=center)
     current_estimate, current_score = _inner_procedure(score_class, full_I, **params)
     assert utils.is_dag(current_estimate)
     _, omegas, _ = score_class._mle_full(current_estimate)
@@ -303,7 +359,9 @@ def fit_rank(
     if direction == "forward":
         current_I = known_targets
         score_class = Score(data, current_I, lmbda=lmbda)
-        current_estimate, current_score = _inner_procedure(score_class, current_I, **params)
+        current_estimate, current_score = _inner_procedure(
+            score_class, current_I, **params
+        )
         verb = "Adding"
         order.reverse()
     elif direction == "backward":
@@ -319,12 +377,18 @@ def fit_rank(
         assert known_targets <= current_I
         if i in known_targets:
             continue
-        print("    Current I=%s (score = %0.2f)" % (current_I, current_score)) if debug else None
+        print(
+            "    Current I=%s (score = %0.2f)" % (current_I, current_score)
+        ) if debug else None
         next_I = current_I | {i} if direction == "forward" else current_I - {i}
         score_class.set_I(next_I)
         next_estimate, next_score = _inner_procedure(score_class, next_I, **params)
-        if next_score >= current_score:
-            current_score, current_estimate, current_I = (next_score, next_estimate, next_I)
+        if next_score > current_score:
+            current_score, current_estimate, current_I = (
+                next_score,
+                next_estimate,
+                next_I,
+            )
         else:
             break
     # Return highest scoring estimate
@@ -341,7 +405,6 @@ def _inner_procedure(
     lmbda=None,
     phases=["forward", "backward", "turning"],
     iterate=True,
-    centered=True,
     covariances=None,
     previous_score=None,
     debug=0,
@@ -369,10 +432,6 @@ def _inner_procedure(
     iterate : bool, default=False
         Indicates whether the phases of the inner procedure (modified
         GES) should be iterated more than once.
-    centered : bool, default=True
-        Whether the data is centered when computing the score
-        (`centered=True`), or the noise-term means are also estimated
-        respecting the constraints imposed by `I`.
     covariances : numpy.ndarray, default=None
         A `e x p x p` array where `e` is the number of environmnets
         and `p` the number of variables. Specifies the scatter
@@ -393,6 +452,8 @@ def _inner_procedure(
         return utils.pdag_to_icpdag(PDAG, I)
 
     # Run inner procedure
-    estimate, score = ges.fit(score_class, completion_algorithm, phases=phases, iterate=iterate, debug=debug)
+    estimate, score = ges.fit(
+        score_class, completion_algorithm, phases=phases, iterate=iterate, debug=debug
+    )
 
     return estimate, score

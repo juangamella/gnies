@@ -1,3 +1,7 @@
+v0.3.3, 2024-06-23
+-- Added parameter "center" to gnies.fit* functions so that noise-term means are estimated according to constraints in I
+-- Updated README and added example to docs/
+-- Condition for score improvement is now > instead of >=
 v0.3.2, 2022-11-29
 -- Updated README with link to the paper.
 v0.3.1, 2022-11-04
