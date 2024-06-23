@@ -95,9 +95,10 @@ def fit(
         ordering; if 'backward', we start with the full set and remove
         targets instead.
     center : bool, default=True
-        Whether the data is centered when computing the score
-        (`center=True`), or the noise-term means are also estimated
-        respecting the constraints imposed by `I`.
+        Whether GnIES considers interventions only on the noise-term
+        variance (`center=True`, i.e., data is centered before
+        computing the score) or on both the mean and variance
+        (`center=False`).
     ges_iterate : bool, default=False
         Indicates whether the phases of the inner procedure (modified
         GES) should be iterated more than once.
@@ -188,9 +189,10 @@ def fit_greedy(
     phases : [{'forward', 'backward'}*], default=['forward', 'backward']
         Specifies which phases of the outer procedure are run.
     center : bool, default=True
-        Whether the data is centered when computing the score
-        (`center=True`), or the noise-term means are also estimated
-        respecting the constraints imposed by `I`.
+        Whether GnIES considers interventions only on the noise-term
+        variance (`center=True`, i.e., data is centered before
+        computing the score) or on both the mean and variance
+        (`center=False`).
     ges_phases : [{'forward', 'backward', 'turning'}*], optional
         Which phases of the inner procedure (modified GES) are run,
         and in which order. Defaults to `['forward', 'backward',
@@ -304,9 +306,10 @@ def fit_rank(
         targets according to the found ordering. If 'backward', we
         start with the full set and remove targets.
     center : bool, default=True
-        Whether the data is centered when computing the score
-        (`center=True`), or the noise-term means are also estimated
-        respecting the constraints imposed by `I`.
+        Whether GnIES considers interventions only on the noise-term
+        variance (`center=True`, i.e., data is centered before
+        computing the score) or on both the mean and variance
+        (`center=False`).
     ges_phases : [{'forward', 'backward', 'turning'}*], optional
         Which phases of the inner procedure (modified GES) are run,
         and in which order. Defaults to `['forward', 'backward',
