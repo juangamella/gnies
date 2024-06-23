@@ -37,7 +37,8 @@ algorithm described in Chickering's original GES paper from 2002.
 import numpy as np
 from functools import reduce
 import itertools
-import networkx as nx  # for d-separation
+
+# import networkx as nx  # for d-separation
 
 # --------------------------------------------------------------------
 # Graph functions for PDAGS
